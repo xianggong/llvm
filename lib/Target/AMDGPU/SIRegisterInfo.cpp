@@ -488,7 +488,7 @@ unsigned SIRegisterInfo::getPreloadedValue(const MachineFunction &MF,
     return AMDGPU::VGPR2;
   // Multi2Sim
   case SIRegisterInfo::PTR_UAV_TABLE:
-    return AMDGPU::SGPR0_SGPR1;
+    return AMDGPU::SGPR2_SGPR3;
   case SIRegisterInfo::IMM_CONST_BUFFER_ZERO:
     return AMDGPU::SGPR4_SGPR5_SGPR6_SGPR7;
   case SIRegisterInfo::IMM_CONST_BUFFER_ONE:

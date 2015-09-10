@@ -103,7 +103,7 @@ struct SIRegisterInfo : public AMDGPURegisterInfo {
     TIDIG_Z,
     PTR_UAV_TABLE,
     IMM_CONST_BUFFER_ZERO,
-    IMM_CONST_BUFFER_ONE    
+    IMM_CONST_BUFFER_ONE
   };
 
   /// \brief Returns the physical register that \p Value is stored in.

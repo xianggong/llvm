@@ -62,7 +62,15 @@ class SITargetLowering : public AMDGPUTargetLowering {
   // Multi2Sim
   SDValue getM2SMetadata(SelectionDAG &DAG, EVT VT, EVT MemVT, SDLoc DL,
                          SDValue Chain, unsigned Offset, bool Signed) const;
-  
+  SDValue getM2SReadImmConst(
+      SelectionDAG &DAG, EVT VT, SDLoc DL, SDValue Chain, unsigned Offset,
+      enum SIRegisterInfo::PreloadedValue IdxImmConstantBuf) const;
+  SDValue getM2SLowerFormalArgument(SDValue Chain, CallingConv::ID CallConv,
+                                    bool isVarArg,
+                                    const SmallVectorImpl<ISD::InputArg> &Ins,
+                                    SDLoc DL, SelectionDAG &DAG,
+                                    SmallVectorImpl<SDValue> &InVals) const;
+
 public:
   SITargetLowering(TargetMachine &tm, const AMDGPUSubtarget &STI);
 
@@ -126,6 +134,11 @@ public:
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                StringRef Constraint, MVT VT) const override;
   SDValue copyToM0(SelectionDAG &DAG, SDValue Chain, SDLoc DL, SDValue V) const;
+
+  SDValue getM2SUav(SelectionDAG &DAG, SDLoc DL, SDValue Chain,
+                  unsigned UavIndex) const;
+  SDValue getImmConstBufferDescRegs(SelectionDAG &DAG, SDLoc DL,
+                                    unsigned Idx) const;
 };
 
 } // End namespace llvm

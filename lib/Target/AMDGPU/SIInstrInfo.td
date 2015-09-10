@@ -96,9 +96,28 @@ def SIload_constant : SDNode<"AMDGPUISD::LOAD_CONSTANT",
 >;
 
 // Multi2Sim node
-def m2s_metadata : SDNode<"AMDGPUISD::M2S_METADATA", 
-  SDTypeProfile<1, 2, [SDTCisVT<0, i32>, SDTCisVT<1, v4i32>, SDTCisVT<2, i32>]>,
-                      [SDNPMayLoad]
+def m2s_load_imm_const : SDNode<"AMDGPUISD::M2S_LOAD_IMM_CONST", 
+  SDTypeProfile<1, 2, [SDTCisVT<0, iAny>, SDTCisVT<1, v4i32>, SDTCisVT<2, i32>]>,
+                      [SDNPMayLoad, SDNPHasChain]
+>;
+
+def SItbuffer_load : SDNode<"AMDGPUISD::TBUFFER_LOAD_FORMAT",
+  SDTypeProfile<1, 12,
+    [SDTCisVT<0, iAny>,
+     SDTCisVT<1, v4i32>,   // rsrc(SGPR)
+     SDTCisVT<2, i32>,    // num_channels(imm)
+     SDTCisVT<3, i32>,    // vaddr(VGPR)
+     SDTCisVT<4, i32>,    // soffset(SGPR)
+     SDTCisVT<5, i32>,    // inst_offset(imm)
+     SDTCisVT<6, i32>,    // dfmt(imm)
+     SDTCisVT<7, i32>,    // nfmt(imm)
+     SDTCisVT<8, i32>,    // offen(imm)
+     SDTCisVT<9, i32>,    // idxen(imm)
+     SDTCisVT<10, i32>,   // glc(imm)
+     SDTCisVT<11, i32>,   // slc(imm)
+     SDTCisVT<12, i32>    // tfe(imm)
+    ]>,
+  [SDNPMayLoad, SDNPMemOperand, SDNPHasChain]
 >;
 
 def SItbuffer_store : SDNode<"AMDGPUISD::TBUFFER_STORE_FORMAT",
@@ -577,6 +596,7 @@ def VOP3Mods0Clamp : ComplexPattern<untyped, 3, "SelectVOP3Mods0Clamp">;
 def VOP3Mods0Clamp0OMod : ComplexPattern<untyped, 4, "SelectVOP3Mods0Clamp0OMod">;
 def VOP3Mods  : ComplexPattern<untyped, 2, "SelectVOP3Mods">;
 def VOP3NoMods : ComplexPattern<untyped, 2, "SelectVOP3NoMods">;
+
 
 //===----------------------------------------------------------------------===//
 // SI assembler operands
@@ -2378,13 +2398,13 @@ multiclass MUBUF_Load_Helper <mubuf op, string name, RegisterClass regClass,
       defm _ADDR64 : MUBUFAddr64_m <op, name#"_addr64", (outs regClass:$vdata),
                            (ins VReg_64:$vaddr, SReg_128:$srsrc,
                                 SCSrc_32:$soffset, mbuf_offset:$offset,
-				glc:$glc, slc:$slc, tfe:$tfe),
+                                glc:$glc, slc:$slc, tfe:$tfe),
                            name#" $vdata, $vaddr, $srsrc, $soffset addr64"#"$offset"#
                                 "$glc"#"$slc"#"$tfe",
                            [(set load_vt:$vdata, (ld (MUBUFAddr64 v4i32:$srsrc,
                                                   i64:$vaddr, i32:$soffset,
                                                   i16:$offset, i1:$glc, i1:$slc,
-						  i1:$tfe)))]>;
+                                                  i1:$tfe)))]>;
     }
   }
 }

@@ -1039,6 +1039,9 @@ defm BUFFER_ATOMIC_XOR : MUBUF_Atomic <
 //def TBUFFER_LOAD_FORMAT_X : MTBUF_ <0x00000000, "tbuffer_load_format_x", []>;
 //def TBUFFER_LOAD_FORMAT_XY : MTBUF_ <0x00000001, "tbuffer_load_format_xy", []>;
 //def TBUFFER_LOAD_FORMAT_XYZ : MTBUF_ <0x00000002, "tbuffer_load_format_xyz", []>;
+defm TBUFFER_LOAD_FORMAT_X : MTBUF_Load_Helper <0x00000000, "tbuffer_load_format_x", VGPR_32>;
+defm TBUFFER_LOAD_FORMAT_XY : MTBUF_Load_Helper <0x00000001, "tbuffer_load_format_xy", VReg_64>;
+defm TBUFFER_LOAD_FORMAT_XYZ : MTBUF_Load_Helper <0x00000002, "tbuffer_load_format_xyz", VReg_128>;
 defm TBUFFER_LOAD_FORMAT_XYZW : MTBUF_Load_Helper <0x00000003, "tbuffer_load_format_xyzw", VReg_128>;
 defm TBUFFER_STORE_FORMAT_X : MTBUF_Store_Helper <0x00000004, "tbuffer_store_format_x", VGPR_32>;
 defm TBUFFER_STORE_FORMAT_XY : MTBUF_Store_Helper <0x00000005, "tbuffer_store_format_xy", VReg_64>;
@@ -2049,6 +2052,29 @@ def SI_CONSTDATA_PTR : InstSI <
 
 } // end SubtargetPredicate = isGCN
 
+// Pattern to for load from global memory address 
+def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
+
+// Global load
+def : Pat <
+  (i32 (global_load (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, i1:$idxen, 
+                                 i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr, 
+                                 v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset))),
+  (TBUFFER_LOAD_FORMAT_X $offset, $offen, $glc, $idxen, $addr64, $dfmt, 
+                         $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset)
+>;
+
+// Typed buffer store
+def : Pat <
+  (global_store i32:$vdata, (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, 
+                                         i1:$idxen, i1:$addr64, i8:$dfmt, 
+                                         i8:$nfmt, i32:$vaddr, v4i32:$srsrc, 
+                                         i1:$slc, i1:$tfe, i32:$soffset)),
+  (TBUFFER_STORE_FORMAT_X i32:$vdata, i16:$offset, i1:$offen, i1:$idxen, 
+                          i1:$glc, i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr,
+                          v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset)
+>;
+
 let Predicates = [isGCN] in {
 
 def : Pat<
@@ -2079,12 +2105,11 @@ def : Pat <
 
 /* Multi2Sim */
 //
-// Pattern to load metadata from imm_const_buffer_1 for most workitem functions
+// Pattern to load data from imm constant buffers
 def : Pat <
-  (m2s_metadata v4i32:$sbase, i32:$offset),
-  (i32 (S_BUFFER_LOAD_DWORD_IMM $sbase, (as_dword_i32imm $offset)))
+  (m2s_load_imm_const v4i32:$sbase, i32:$offset),
+  (S_BUFFER_LOAD_DWORD_IMM $sbase, (as_i32imm $offset))
 >;
-
 
 //===----------------------------------------------------------------------===//
 // SMRD Patterns
@@ -2991,6 +3016,23 @@ def : MUBUFStore_Pattern <BUFFER_STORE_DWORDX4_ADDR64, v4i32, store_private>;
 //===----------------------------------------------------------------------===//
 // MTBUF Patterns
 //===----------------------------------------------------------------------===//
+
+// TBUFFER_LOAD_FORMAT_*, addr64=0
+class MTBUF_LoadResource <ValueType vt, int num_channels, MTBUF opcode> : Pat<
+  (SItbuffer_load v4i32:$rsrc, num_channels, i32:$vaddr,
+                   i32:$soffset, imm:$inst_offset, imm:$dfmt,
+                   imm:$nfmt, imm:$offen, imm:$idxen,
+                   imm:$glc, imm:$slc, imm:$tfe),
+  (opcode
+    (as_i16imm $inst_offset), (as_i1imm $offen), (as_i1imm $idxen),
+    (as_i1imm $glc), 0, (as_i8imm $dfmt), (as_i8imm $nfmt), $vaddr, $rsrc,
+    (as_i1imm $slc), (as_i1imm $tfe), $soffset)
+>;
+
+def : MTBUF_LoadResource <i32, 1, TBUFFER_LOAD_FORMAT_X>;
+//def : MTBUF_LoadResource <v2i32, 2, TBUFFER_LOAD_FORMAT_XY>;
+//def : MTBUF_LoadResource <v4i32, 3, TBUFFER_LOAD_FORMAT_XYZ>;
+//def : MTBUF_LoadResource <v4i32, 4, TBUFFER_LOAD_FORMAT_XYZW>;
 
 // TBUFFER_STORE_FORMAT_*, addr64=0
 class MTBUF_StoreResource <ValueType vt, int num_channels, MTBUF opcode> : Pat<
