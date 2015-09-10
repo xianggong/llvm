@@ -2613,6 +2613,11 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
     if (Tmp == 1) return 1;  // Early out.
     Tmp2 = ComputeNumSignBits(Op.getOperand(2), Depth+1);
     return std::min(Tmp, Tmp2);
+  case ISD::SELECT_CC:
+    Tmp = ComputeNumSignBits(Op.getOperand(2), Depth+1);
+    if (Tmp == 1) return 1;  // Early out.
+    Tmp2 = ComputeNumSignBits(Op.getOperand(3), Depth+1);
+    return std::min(Tmp, Tmp2);
   case ISD::SMIN:
   case ISD::SMAX:
   case ISD::UMIN:
@@ -3343,6 +3348,13 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
                               SDValue N2, const SDNodeFlags *Flags) {
   ConstantSDNode *N1C = dyn_cast<ConstantSDNode>(N1);
   ConstantSDNode *N2C = dyn_cast<ConstantSDNode>(N2);
+
+  // Canonicalize constant to RHS if commutative.
+  if (N1C && !N2C && isCommutativeBinOp(Opcode)) {
+    std::swap(N1C, N2C);
+    std::swap(N1, N2);
+  }
+
   switch (Opcode) {
   default: break;
   case ISD::TokenFactor:
@@ -3686,12 +3698,6 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
   if (SDValue SV =
           FoldConstantArithmetic(Opcode, DL, VT, N1.getNode(), N2.getNode()))
     return SV;
-
-  // Canonicalize constant to RHS if commutative.
-  if (N1C && !N2C && isCommutativeBinOp(Opcode)) {
-    std::swap(N1C, N2C);
-    std::swap(N1, N2);
-  }
 
   // Constant fold FP operations.
   bool HasFPExceptions = TLI->hasFloatingPointExceptions();

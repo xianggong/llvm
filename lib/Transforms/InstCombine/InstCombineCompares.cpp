@@ -2140,6 +2140,12 @@ bool InstCombiner::OptimizeOverflowCheck(OverflowCheckFlavor OCF, Value *LHS,
     return true;
   };
 
+  // If the overflow check was an add followed by a compare, the insertion point
+  // may be pointing to the compare.  We want to insert the new instructions
+  // before the add in case there are uses of the add between the add and the
+  // compare.
+  Builder->SetInsertPoint(&OrigI);
+
   switch (OCF) {
   case OCF_INVALID:
     llvm_unreachable("bad overflow check kind!");
@@ -2240,7 +2246,9 @@ static Instruction *ProcessUMulZExtIdiom(ICmpInst &I, Value *MulVal,
 
   assert(I.getOperand(0) == MulVal || I.getOperand(1) == MulVal);
   assert(I.getOperand(0) == OtherVal || I.getOperand(1) == OtherVal);
-  Instruction *MulInstr = cast<Instruction>(MulVal);
+  auto *MulInstr = dyn_cast<Instruction>(MulVal);
+  if (!MulInstr)
+    return nullptr;
   assert(MulInstr->getOpcode() == Instruction::Mul);
 
   auto *LHS = cast<ZExtOperator>(MulInstr->getOperand(0)),

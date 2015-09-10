@@ -1,5 +1,4 @@
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -926,8 +925,6 @@ static void InitializeModuleAndPassManager() {
   // Create a new pass manager attached to it.
   TheFPM = llvm::make_unique<legacy::FunctionPassManager>(TheModule.get());
 
-  // Provide basic AliasAnalysis support for GVN.
-  TheFPM->add(createBasicAliasAnalysisPass());
   // Do simple "peephole" optimizations and bit-twiddling optzns.
   TheFPM->add(createInstructionCombiningPass());
   // Reassociate expressions.
@@ -1024,13 +1021,13 @@ static void MainLoop() {
 
 /// putchard - putchar that takes a double and returns 0.
 extern "C" double putchard(double X) {
-  putchar((char)X);
+  fputc((char)X, stderr);
   return 0;
 }
 
 /// printd - printf that takes a double prints it as "%f\n", returning 0.
 extern "C" double printd(double X) {
-  printf("%f\n", X);
+  fprintf(stderr, "%f\n", X);
   return 0;
 }
 

@@ -28,6 +28,7 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetMachine.h"
@@ -39,8 +40,7 @@ using namespace llvm;
 #define DEBUG_TYPE "codegen"
 
 MachineBasicBlock::MachineBasicBlock(MachineFunction &mf, const BasicBlock *bb)
-  : BB(bb), Number(-1), xParent(&mf), Alignment(0), IsLandingPad(false),
-    AddressTaken(false), CachedMCSymbol(nullptr) {
+    : BB(bb), Number(-1), xParent(&mf) {
   Insts.Parent = this;
 }
 
@@ -203,7 +203,7 @@ const MachineBasicBlock *MachineBasicBlock::getLandingPadSuccessor() const {
   if (succ_size() > 2)
     return nullptr;
   for (const_succ_iterator I = succ_begin(), E = succ_end(); I != E; ++I)
-    if ((*I)->isLandingPad())
+    if ((*I)->isEHPad())
       return *I;
   return nullptr;
 }
@@ -266,7 +266,7 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
     LBB->printAsOperand(OS, /*PrintType=*/false, MST);
     Comma = ", ";
   }
-  if (isLandingPad()) { OS << Comma << "EH LANDING PAD"; Comma = ", "; }
+  if (isEHPad()) { OS << Comma << "EH LANDING PAD"; Comma = ", "; }
   if (hasAddressTaken()) { OS << Comma << "ADDRESS TAKEN"; Comma = ", "; }
   if (Alignment)
     OS << Comma << "Align " << Alignment << " (" << (1u << Alignment)
@@ -278,8 +278,10 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
   if (!livein_empty()) {
     if (Indexes) OS << '\t';
     OS << "    Live Ins:";
-    for (unsigned LI : make_range(livein_begin(), livein_end())) {
-      OS << ' ' << PrintReg(LI, TRI);
+    for (const auto &LI : make_range(livein_begin(), livein_end())) {
+      OS << ' ' << PrintReg(LI.PhysReg, TRI);
+      if (LI.LaneMask != ~0u)
+        OS << format(":%08X", LI.LaneMask);
     }
     OS << '\n';
   }
@@ -322,15 +324,43 @@ void MachineBasicBlock::printAsOperand(raw_ostream &OS,
   OS << "BB#" << getNumber();
 }
 
-void MachineBasicBlock::removeLiveIn(MCPhysReg Reg) {
-  LiveInVector::iterator I = std::find(LiveIns.begin(), LiveIns.end(), Reg);
-  if (I != LiveIns.end())
+void MachineBasicBlock::removeLiveIn(MCPhysReg Reg, unsigned LaneMask) {
+  LiveInVector::iterator I = std::find_if(
+      LiveIns.begin(), LiveIns.end(),
+      [Reg] (const RegisterMaskPair &LI) { return LI.PhysReg == Reg; });
+  if (I == LiveIns.end())
+    return;
+
+  I->LaneMask &= ~LaneMask;
+  if (I->LaneMask == 0)
     LiveIns.erase(I);
 }
 
-bool MachineBasicBlock::isLiveIn(MCPhysReg Reg) const {
-  livein_iterator I = std::find(livein_begin(), livein_end(), Reg);
-  return I != livein_end();
+bool MachineBasicBlock::isLiveIn(MCPhysReg Reg, unsigned LaneMask) const {
+  livein_iterator I = std::find_if(
+      LiveIns.begin(), LiveIns.end(),
+      [Reg] (const RegisterMaskPair &LI) { return LI.PhysReg == Reg; });
+  return I != livein_end() && (I->LaneMask & LaneMask) != 0;
+}
+
+void MachineBasicBlock::sortUniqueLiveIns() {
+  std::sort(LiveIns.begin(), LiveIns.end(),
+            [](const RegisterMaskPair &LI0, const RegisterMaskPair &LI1) {
+              return LI0.PhysReg < LI1.PhysReg;
+            });
+  // Liveins are sorted by physreg now we can merge their lanemasks.
+  LiveInVector::const_iterator I = LiveIns.begin();
+  LiveInVector::const_iterator J;
+  LiveInVector::iterator Out = LiveIns.begin();
+  for (; I != LiveIns.end(); ++Out, I = J) {
+    unsigned PhysReg = I->PhysReg;
+    unsigned LaneMask = I->LaneMask;
+    for (J = std::next(I); J != LiveIns.end() && J->PhysReg == PhysReg; ++J)
+      LaneMask |= J->LaneMask;
+    Out->PhysReg = PhysReg;
+    Out->LaneMask = LaneMask;
+  }
+  LiveIns.erase(Out, LiveIns.end());
 }
 
 unsigned
@@ -338,7 +368,7 @@ MachineBasicBlock::addLiveIn(MCPhysReg PhysReg, const TargetRegisterClass *RC) {
   assert(getParent() && "MBB must be inserted in function");
   assert(TargetRegisterInfo::isPhysicalRegister(PhysReg) && "Expected physreg");
   assert(RC && "Register class is required");
-  assert((isLandingPad() || this == &getParent()->front()) &&
+  assert((isEHPad() || this == &getParent()->front()) &&
          "Only the entry block and landing pads can have physreg live ins");
 
   bool LiveIn = isLiveIn(PhysReg);
@@ -396,7 +426,7 @@ void MachineBasicBlock::updateTerminator() {
       // its layout successor, insert a branch. First we have to locate the
       // only non-landing-pad successor, as that is the fallthrough block.
       for (succ_iterator SI = succ_begin(), SE = succ_end(); SI != SE; ++SI) {
-        if ((*SI)->isLandingPad())
+        if ((*SI)->isEHPad())
           continue;
         assert(!TBB && "Found more than one non-landing-pad successor!");
         TBB = *SI;
@@ -432,7 +462,7 @@ void MachineBasicBlock::updateTerminator() {
       // as the fallthrough successor.
       MachineBasicBlock *FallthroughBB = nullptr;
       for (succ_iterator SI = succ_begin(), SE = succ_end(); SI != SE; ++SI) {
-        if ((*SI)->isLandingPad() || *SI == TBB)
+        if ((*SI)->isEHPad() || *SI == TBB)
           continue;
         assert(!FallthroughBB && "Found more than one fallthrough successor.");
         FallthroughBB = *SI;
@@ -662,7 +692,7 @@ MachineBasicBlock *
 MachineBasicBlock::SplitCriticalEdge(MachineBasicBlock *Succ, Pass *P) {
   // Splitting the critical edge to a landing pad block is non-trivial. Don't do
   // it in this generic function.
-  if (Succ->isLandingPad())
+  if (Succ->isEHPad())
     return nullptr;
 
   MachineFunction *MF = getParent();
@@ -804,7 +834,7 @@ MachineBasicBlock::SplitCriticalEdge(MachineBasicBlock *Succ, Pass *P) {
         i->getOperand(ni+1).setMBB(NMBB);
 
   // Inherit live-ins from the successor
-  for (unsigned LI : Succ->liveins())
+  for (const auto &LI : Succ->liveins())
     NMBB->addLiveIn(LI);
 
   // Update LiveVariables.
@@ -1046,7 +1076,7 @@ bool MachineBasicBlock::CorrectExtraCFGEdges(MachineBasicBlock *DestA,
   while (SI != succ_end()) {
     const MachineBasicBlock *MBB = *SI;
     if (!SeenMBBs.insert(MBB).second ||
-        (MBB != DestA && MBB != DestB && !MBB->isLandingPad())) {
+        (MBB != DestA && MBB != DestB && !MBB->isEHPad())) {
       // This is a superfluous edge, remove it.
       SI = removeSuccessor(SI);
       Changed = true;

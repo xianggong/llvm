@@ -3,7 +3,6 @@ set(LLVM_LINK_COMPONENTS
   Core
   ExecutionEngine
   InstCombine
-  MCJIT
   Object
   RuntimeDyld
   ScalarOpts
@@ -14,3 +13,5 @@ set(LLVM_LINK_COMPONENTS
 add_kaleidoscope_chapter(Kaleidoscope-Ch6
   toy.cpp
   )
+
+export_executable_symbols(Kaleidoscope-Ch6)
