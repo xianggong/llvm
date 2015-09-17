@@ -1605,22 +1605,22 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
   dfmt = CurDAG->getTargetConstant(0, DL, MVT::i8);
   nfmt = CurDAG->getTargetConstant(0, DL, MVT::i8);
 
-  if (In.getOpcode() == ISD::ADD)
-  {
+  if (In.getOpcode() == ISD::ADD) {
 
     SDValue N0 = In.getOperand(0);
     SDValue N1 = In.getOperand(1);
 
-    if (N0.getOpcode() == ISD::SIGN_EXTEND)
-    {
+    if (N0.getOpcode() == ISD::SIGN_EXTEND) {
       SDValue Para = N0.getOperand(0);
 
-      SDValue UavIdx = Para.getOperand(2);
-      unsigned UavIdxNum = cast<ConstantSDNode>(UavIdx)->getZExtValue();
+      // Get UAV index
+      SDValue ParaOffset = Para.getOperand(2);
+      unsigned UavIdxNum =
+          (cast<ConstantSDNode>(ParaOffset)->getZExtValue() >> 2);
 
       const SITargetLowering &Lowering =
           *static_cast<const SITargetLowering *>(getTargetLowering());
-      
+
       // Get UAV resource description from 4 SRegs
       srsrc =
           Lowering.getM2SUav(*CurDAG, SDLoc(Para), Para.getValue(1), UavIdxNum);
@@ -1629,14 +1629,13 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
       offen = CurDAG->getTargetConstant(1, DL, MVT::i1);
 
       SDValue NewShl;
-      if (N1.getValueType() == MVT::i64)
-      {
+      if (N1.getValueType() == MVT::i64) {
         // An i64 value from ISD::SHL node, we need to replace this
         // node with corresponding i32 one
         SDValue NewShlOperand0 = N1.getOperand(0).getOperand(0);
         SDValue NewShlOperand1 = N1.getOperand(1);
         SDValue NewShlOps[] = {NewShlOperand0, NewShlOperand1};
-        NewShl = SDValue(CurDAG->getMachineNode(AMDGPU::V_LSHRREV_B32_e32, DL,
+        NewShl = SDValue(CurDAG->getMachineNode(AMDGPU::V_LSHLREV_B32_e32_si, DL,
                                                 MVT::i32, NewShlOps),
                          0);
         CurDAG->ReplaceAllUsesOfValueWith(N1, NewShl);

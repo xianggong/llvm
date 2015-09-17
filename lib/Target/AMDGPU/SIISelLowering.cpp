@@ -1028,15 +1028,30 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     case Intrinsic::r600_read_global_size_z:
       return getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
                             SI::M2SMetadataOffsets::GLOBAL_SIZE_Z, false);
-    case Intrinsic::r600_read_local_size_x:
-      return getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::M2SMetadataOffsets::LOCAL_SIZE_X, false);
-    case Intrinsic::r600_read_local_size_y:
-      return getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::M2SMetadataOffsets::LOCAL_SIZE_Y, false);
-    case Intrinsic::r600_read_local_size_z:
-      return getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::M2SMetadataOffsets::LOCAL_SIZE_Z, false);
+    case Intrinsic::r600_read_local_size_x: {
+      SDValue localSize =
+          getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
+                         SI::M2SMetadataOffsets::LOCAL_SIZE_X, false);
+      SDValue maxLocalSize = DAG.getConstant(65535, DL, MVT::i32);
+      SDValue Ops[] = {localSize, maxLocalSize};
+      return DAG.getNode(ISD::UMIN, DL, MVT::i32, Ops);
+    }
+    case Intrinsic::r600_read_local_size_y: {
+      SDValue localSize =
+          getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
+                         SI::M2SMetadataOffsets::LOCAL_SIZE_Y, false);
+      SDValue maxLocalSize = DAG.getConstant(65535, DL, MVT::i32);
+      SDValue Ops[] = {localSize, maxLocalSize};
+      return DAG.getNode(ISD::UMIN, DL, MVT::i32, Ops);
+    }
+    case Intrinsic::r600_read_local_size_z: {
+      SDValue localSize =
+          getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
+                         SI::M2SMetadataOffsets::LOCAL_SIZE_Z, false);
+      SDValue maxLocalSize = DAG.getConstant(65535, DL, MVT::i32);
+      SDValue Ops[] = {localSize, maxLocalSize};
+      return DAG.getNode(ISD::UMIN, DL, MVT::i32, Ops);
+    }
     case Intrinsic::AMDGPU_read_workdim:
       return getM2SMetadata(DAG, VT, VT, DL, DAG.getEntryNode(),
                             getImplicitParameterOffset(MFI, GRID_DIM), false);
@@ -2393,7 +2408,7 @@ SITargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
 SDValue SITargetLowering::getM2SMetadata(SelectionDAG &DAG, EVT VT, EVT MemVT,
                                          SDLoc DL, SDValue Chain,
                                          unsigned Offset, bool Signed) const {
-  return getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
+  return getM2SReadImmConst(DAG, VT, DL, Chain, Offset >> 2,
                             SIRegisterInfo::IMM_CONST_BUFFER_ONE);
 }
 
@@ -2432,29 +2447,10 @@ SDValue SITargetLowering::getM2SReadImmConst(
   return M2sMetadataNode;
 }
 
-SDValue SITargetLowering::getImmConstBufferDescRegs(SelectionDAG &DAG, SDLoc DL,
-                                                    unsigned Idx) const {
-  assert((Idx == 0 || Idx == 1) && "Invalid imm_const_buffer index");
-  enum SIRegisterInfo::PreloadedValue IdxImmConstantBuf =
-      (Idx == 0) ? SIRegisterInfo::IMM_CONST_BUFFER_ZERO
-                 : SIRegisterInfo::IMM_CONST_BUFFER_ONE;
-  const SIRegisterInfo *TRI =
-      static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
-  MachineFunction &MF = DAG.getMachineFunction();
-
-  unsigned ImmConstBuffer = TRI->getPreloadedValue(MF, IdxImmConstantBuf);
-  MF.addLiveIn(ImmConstBuffer, &AMDGPU::SReg_128RegClass);
-
-  MachineRegisterInfo &MRI = DAG.getMachineFunction().getRegInfo();
-
-  return DAG.getCopyFromReg(DAG.getEntryNode(), DL,
-                            MRI.getLiveInVirtReg(ImmConstBuffer), MVT::v4i32);
-}
-
 // Read from ptr_uav_table with offset
 // s_load_dwordx4 s[4 Sregs], s[2:3], offset
 SDValue SITargetLowering::getM2SUav(
-    SelectionDAG &DAG, SDLoc DL, SDValue Chain, unsigned LocMemOffset) const {
+    SelectionDAG &DAG, SDLoc DL, SDValue Chain, unsigned UavIndex) const {
 
 const SIRegisterInfo *TRI =
       static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
@@ -2470,7 +2466,7 @@ const SIRegisterInfo *TRI =
       DAG.getEntryNode(), DL, MRI.getLiveInVirtReg(PtrUavTable), MVT::i64);
 
   // First 10 UAVs are reserved
-  unsigned Offset = 16 * (10 + LocMemOffset / 4);
+  unsigned Offset = 8 * (10 + UavIndex);
   SDValue UavOffset = DAG.getConstant(Offset, DL, MVT::i32);
 
   const SDValue Ops[] = {PtrUavTableSRegs, UavOffset};
@@ -2562,14 +2558,28 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
 
     if (VA.isMemLoc()) {
       VT = Ins[i].VT;
-      const unsigned Offset = VA.getLocMemOffset();
 
-      // Read from imm_const_buffer_0
-      SDValue Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
-                                       SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
+      const unsigned Offset = VA.getLocMemOffset() >> 1;
 
-      // Need to return MVT::i64
-      SDValue extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);
+      SDValue Arg;
+      SDValue extArg;
+
+      if (VT == MVT::i64)
+      {
+        // Read from imm_const_buffer_0
+        Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
+                                 SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
+
+        // Need to return MVT::i64
+        extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);        
+      }
+      else if (VT == MVT::i32)
+      {
+        // Read from imm_const_buffer_1
+        Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
+                                 SIRegisterInfo::IMM_CONST_BUFFER_ONE);
+        extArg = Arg;
+      }
       
       Chains.push_back(Arg.getValue(1));
       InVals.push_back(extArg);

@@ -135,10 +135,9 @@ public:
                                StringRef Constraint, MVT VT) const override;
   SDValue copyToM0(SelectionDAG &DAG, SDValue Chain, SDLoc DL, SDValue V) const;
 
+  // Multi2Sim
   SDValue getM2SUav(SelectionDAG &DAG, SDLoc DL, SDValue Chain,
                   unsigned UavIndex) const;
-  SDValue getImmConstBufferDescRegs(SelectionDAG &DAG, SDLoc DL,
-                                    unsigned Idx) const;
 };
 
 } // End namespace llvm

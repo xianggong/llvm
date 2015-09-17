@@ -2065,25 +2065,33 @@ def SI_CONSTDATA_PTR : InstSI <
 // Pattern to for load from global memory address 
 def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
 
-// Global load
-def : Pat <
-  (i32 (global_load (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, i1:$idxen, 
-                                 i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr, 
-                                 v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset))),
-  (TBUFFER_LOAD_FORMAT_X $offset, $offen, $glc, $idxen, $addr64, $dfmt, 
+// Global load pattern
+class GlobalLoadM2S <MTBUF opcode, ValueType vt> : Pat <
+    (vt (global_load (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, i1:$idxen, 
+                                     i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr, 
+                                     v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset))),
+    (opcode $offset, $offen, $glc, $idxen, $addr64, $dfmt, 
                          $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset)
 >;
 
-// Typed buffer store
-def : Pat <
-  (global_store i32:$vdata, (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, 
+// Global store pattern
+class GlobalStoreM2S <MTBUF opcode, ValueType vt> : Pat <
+  (global_store vt:$vdata, (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, 
                                          i1:$idxen, i1:$addr64, i8:$dfmt, 
                                          i8:$nfmt, i32:$vaddr, v4i32:$srsrc, 
                                          i1:$slc, i1:$tfe, i32:$soffset)),
-  (TBUFFER_STORE_FORMAT_X i32:$vdata, i16:$offset, i1:$offen, i1:$idxen, 
-                          i1:$glc, i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr,
-                          v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset)
+  (opcode vt:$vdata, i16:$offset, i1:$offen, i1:$idxen, 
+          i1:$glc, i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr,
+          v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset)
 >;
+
+def GlobalLoadi32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_X, i32>;
+def GlobalLoadv2i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
+def GlobalLoadv4i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
+
+def GlobalStorei32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_X, i32>;
+def GlobalStorev2i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XY, v2i32>;
+def GlobalStorev4i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XYZW, v4i32>;
 
 let Predicates = [isGCN] in {
 
