@@ -819,12 +819,16 @@ void PEI::replaceFrameIndices(MachineFunction &Fn) {
     if (FuncInfo.UnwindHelpFrameIdx != INT_MAX)
       FuncInfo.UnwindHelpFrameOffset = TFI.getFrameIndexReferenceFromSP(
           Fn, FuncInfo.UnwindHelpFrameIdx, FrameReg);
-  } else if (MMI.hasWinEHFuncInfo(F)) {
-    WinEHFuncInfo &FuncInfo = MMI.getWinEHFuncInfo(Fn.getFunction());
-    auto I = FuncInfo.CatchHandlerParentFrameObjIdx.find(F);
-    if (I != FuncInfo.CatchHandlerParentFrameObjIdx.end())
-      FuncInfo.CatchHandlerParentFrameObjOffset[F] =
-          TFI.getFrameIndexReferenceFromSP(Fn, I->second, FrameReg);
+    for (WinEHTryBlockMapEntry &TBME : FuncInfo.TryBlockMap) {
+      for (WinEHHandlerType &H : TBME.HandlerArray) {
+        unsigned UnusedReg;
+        if (H.CatchObj.FrameIndex == INT_MAX)
+          H.CatchObj.FrameOffset = INT_MAX;
+        else
+          H.CatchObj.FrameOffset =
+              TFI.getFrameIndexReference(Fn, H.CatchObj.FrameIndex, UnusedReg);
+      }
+    }
   }
 
   // Store SPAdj at exit of a basic block.
@@ -897,11 +901,11 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &Fn,
       if (!MI->getOperand(i).isFI())
         continue;
 
-      // Frame indicies in debug values are encoded in a target independent
+      // Frame indices in debug values are encoded in a target independent
       // way with simply the frame index and offset rather than any
       // target-specific addressing mode.
       if (MI->isDebugValue()) {
-        assert(i == 0 && "Frame indicies can only appear as the first "
+        assert(i == 0 && "Frame indices can only appear as the first "
                          "operand of a DBG_VALUE machine instruction");
         unsigned Reg;
         MachineOperand &Offset = MI->getOperand(1);

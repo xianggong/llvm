@@ -439,6 +439,10 @@ Trophies
 
 * ICU: http://bugs.icu-project.org/trac/ticket/11838
 
+* Freetype: https://savannah.nongnu.org/search/?words=LibFuzzer&type_of_search=bugs&Search=Search&exact=1#options
+
+* Linux Kernel's BPF verifier: https://github.com/iovisor/bpf-fuzzer
+
 * LLVM:
 
   * Clang: https://llvm.org/bugs/show_bug.cgi?id=23057
@@ -449,7 +453,14 @@ Trophies
 
   * llvm-as: https://llvm.org/bugs/show_bug.cgi?id=24639
 
-
+  * Disassembler:
+    * Mips: Discovered a number of untested instructions for the Mips target
+      (see valid-mips*.s in http://reviews.llvm.org/rL247405,
+      http://reviews.llvm.org/rL247414, http://reviews.llvm.org/rL247416,
+      http://reviews.llvm.org/rL247417, http://reviews.llvm.org/rL247420,
+      and http://reviews.llvm.org/rL247422) as well some instructions that
+      successfully disassembled on ISA's where they were not valid (see
+      invalid-xfail.s files in the same commits).
 
 .. _pcre2: http://www.pcre.org/
 

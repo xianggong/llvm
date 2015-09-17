@@ -4807,8 +4807,12 @@ bool X86InstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
     return true;
   case X86::KSET0B:
   case X86::KSET0W: return Expand2AddrUndef(MIB, get(X86::KXORWrr));
+  case X86::KSET0D: return Expand2AddrUndef(MIB, get(X86::KXORDrr));
+  case X86::KSET0Q: return Expand2AddrUndef(MIB, get(X86::KXORQrr));
   case X86::KSET1B:
   case X86::KSET1W: return Expand2AddrUndef(MIB, get(X86::KXNORWrr));
+  case X86::KSET1D: return Expand2AddrUndef(MIB, get(X86::KXNORDrr));
+  case X86::KSET1Q: return Expand2AddrUndef(MIB, get(X86::KXNORQrr));
   case TargetOpcode::LOAD_STACK_GUARD:
     expandLoadStackGuard(MIB, *this);
     return true;
@@ -6408,6 +6412,12 @@ static bool isAssociativeAndCommutative(const MachineInstr &Inst) {
   case X86::IMUL16rr:
   case X86::IMUL32rr:
   case X86::IMUL64rr:
+  case X86::PANDrr:
+  case X86::PORrr:
+  case X86::PXORrr:
+  case X86::VPANDrr:
+  case X86::VPORrr:
+  case X86::VPXORrr:
   // Normal min/max instructions are not commutative because of NaN and signed
   // zero semantics, but these are. Thus, there's no need to check for global
   // relaxed math; the instructions themselves have the properties we need.

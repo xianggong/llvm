@@ -1082,114 +1082,118 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     default:
       return AMDGPUTargetLowering::LowerOperation(Op, DAG);
     }
-  } else {
-    switch (IntrinsicID) {
-    case Intrinsic::r600_read_ngroups_x:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::NGROUPS_X, false);
-    case Intrinsic::r600_read_ngroups_y:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::NGROUPS_Y, false);
-    case Intrinsic::r600_read_ngroups_z:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::NGROUPS_Z, false);
-    case Intrinsic::r600_read_global_size_x:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::GLOBAL_SIZE_X, false);
-    case Intrinsic::r600_read_global_size_y:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::GLOBAL_SIZE_Y, false);
-    case Intrinsic::r600_read_global_size_z:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::GLOBAL_SIZE_Z, false);
-    case Intrinsic::r600_read_local_size_x:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::LOCAL_SIZE_X, false);
-    case Intrinsic::r600_read_local_size_y:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::LOCAL_SIZE_Y, false);
-    case Intrinsic::r600_read_local_size_z:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            SI::KernelInputOffsets::LOCAL_SIZE_Z, false);
-    case Intrinsic::AMDGPU_read_workdim:
-      return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
-                            getImplicitParameterOffset(MFI, GRID_DIM), false);
-    case Intrinsic::r600_read_tgid_x:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::SReg_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_X), VT);
-    case Intrinsic::r600_read_tgid_y:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::SReg_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_Y), VT);
-    case Intrinsic::r600_read_tgid_z:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::SReg_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_Z), VT);
-    case Intrinsic::r600_read_tidig_x:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::VGPR_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_X), VT);
-    case Intrinsic::r600_read_tidig_y:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::VGPR_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_Y), VT);
-    case Intrinsic::r600_read_tidig_z:
-      return CreateLiveInRegister(
-          DAG, &AMDGPU::VGPR_32RegClass,
-          TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_Z), VT);
-    case AMDGPUIntrinsic::SI_load_const: {
-      SDValue Ops[] = {Op.getOperand(1), Op.getOperand(2)};
+  }
+  
+  // TODO: Should this propagate fast-math-flags?
 
-      MachineMemOperand *MMO = MF.getMachineMemOperand(
-          MachinePointerInfo(),
-          MachineMemOperand::MOLoad | MachineMemOperand::MOInvariant,
-          VT.getStoreSize(), 4);
-      return DAG.getMemIntrinsicNode(AMDGPUISD::LOAD_CONSTANT, DL,
-                                     Op->getVTList(), Ops, VT, MMO);
-    }
-    case AMDGPUIntrinsic::SI_sample:
-      return LowerSampleIntrinsic(AMDGPUISD::SAMPLE, Op, DAG);
-    case AMDGPUIntrinsic::SI_sampleb:
-      return LowerSampleIntrinsic(AMDGPUISD::SAMPLEB, Op, DAG);
-    case AMDGPUIntrinsic::SI_sampled:
-      return LowerSampleIntrinsic(AMDGPUISD::SAMPLED, Op, DAG);
-    case AMDGPUIntrinsic::SI_samplel:
-      return LowerSampleIntrinsic(AMDGPUISD::SAMPLEL, Op, DAG);
-    case AMDGPUIntrinsic::SI_vs_load_input:
-      return DAG.getNode(AMDGPUISD::LOAD_INPUT, DL, VT, Op.getOperand(1),
-                         Op.getOperand(2), Op.getOperand(3));
+  switch (IntrinsicID) {
+  case Intrinsic::r600_read_ngroups_x:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::NGROUPS_X, false);
+  case Intrinsic::r600_read_ngroups_y:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::NGROUPS_Y, false);
+  case Intrinsic::r600_read_ngroups_z:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::NGROUPS_Z, false);
+  case Intrinsic::r600_read_global_size_x:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::GLOBAL_SIZE_X, false);
+  case Intrinsic::r600_read_global_size_y:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::GLOBAL_SIZE_Y, false);
+  case Intrinsic::r600_read_global_size_z:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::GLOBAL_SIZE_Z, false);
+  case Intrinsic::r600_read_local_size_x:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::LOCAL_SIZE_X, false);
+  case Intrinsic::r600_read_local_size_y:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::LOCAL_SIZE_Y, false);
+  case Intrinsic::r600_read_local_size_z:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          SI::KernelInputOffsets::LOCAL_SIZE_Z, false);
 
-    case AMDGPUIntrinsic::AMDGPU_fract:
-    case AMDGPUIntrinsic::AMDIL_fraction: // Legacy name.
-      return DAG.getNode(ISD::FSUB, DL, VT, Op.getOperand(1),
-                         DAG.getNode(ISD::FFLOOR, DL, VT, Op.getOperand(1)));
-    case AMDGPUIntrinsic::SI_fs_constant: {
-      SDValue M0 = copyToM0(DAG, DAG.getEntryNode(), DL, Op.getOperand(3));
-      SDValue Glue = M0.getValue(1);
-      return DAG.getNode(AMDGPUISD::INTERP_MOV, DL, MVT::f32,
-                         DAG.getConstant(2, DL, MVT::i32), // P0
-                         Op.getOperand(1), Op.getOperand(2), Glue);
-    }
-    case AMDGPUIntrinsic::SI_fs_interp: {
-      SDValue IJ = Op.getOperand(4);
-      SDValue I = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, MVT::i32, IJ,
-                              DAG.getConstant(0, DL, MVT::i32));
-      SDValue J = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, MVT::i32, IJ,
-                              DAG.getConstant(1, DL, MVT::i32));
-      SDValue M0 = copyToM0(DAG, DAG.getEntryNode(), DL, Op.getOperand(3));
-      SDValue Glue = M0.getValue(1);
-      SDValue P1 = DAG.getNode(AMDGPUISD::INTERP_P1, DL,
-                               DAG.getVTList(MVT::f32, MVT::Glue), I,
-                               Op.getOperand(1), Op.getOperand(2), Glue);
-      Glue = SDValue(P1.getNode(), 1);
-      return DAG.getNode(AMDGPUISD::INTERP_P2, DL, MVT::f32, P1, J,
-                         Op.getOperand(1), Op.getOperand(2), Glue);
-    }
-    default:
-      return AMDGPUTargetLowering::LowerOperation(Op, DAG);
-    }
-  } // else
+  case Intrinsic::AMDGPU_read_workdim:
+    return LowerParameter(DAG, VT, VT, DL, DAG.getEntryNode(),
+                          getImplicitParameterOffset(MFI, GRID_DIM), false);
+
+  case Intrinsic::r600_read_tgid_x:
+    return CreateLiveInRegister(DAG, &AMDGPU::SReg_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_X), VT);
+  case Intrinsic::r600_read_tgid_y:
+    return CreateLiveInRegister(DAG, &AMDGPU::SReg_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_Y), VT);
+  case Intrinsic::r600_read_tgid_z:
+    return CreateLiveInRegister(DAG, &AMDGPU::SReg_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TGID_Z), VT);
+  case Intrinsic::r600_read_tidig_x:
+    return CreateLiveInRegister(DAG, &AMDGPU::VGPR_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_X), VT);
+  case Intrinsic::r600_read_tidig_y:
+    return CreateLiveInRegister(DAG, &AMDGPU::VGPR_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_Y), VT);
+  case Intrinsic::r600_read_tidig_z:
+    return CreateLiveInRegister(DAG, &AMDGPU::VGPR_32RegClass,
+      TRI->getPreloadedValue(MF, SIRegisterInfo::TIDIG_Z), VT);
+  case AMDGPUIntrinsic::SI_load_const: {
+    SDValue Ops[] = {
+      Op.getOperand(1),
+      Op.getOperand(2)
+    };
+
+    MachineMemOperand *MMO = MF.getMachineMemOperand(
+      MachinePointerInfo(),
+      MachineMemOperand::MOLoad | MachineMemOperand::MOInvariant,
+      VT.getStoreSize(), 4);
+    return DAG.getMemIntrinsicNode(AMDGPUISD::LOAD_CONSTANT, DL,
+                                   Op->getVTList(), Ops, VT, MMO);
+  }
+  case AMDGPUIntrinsic::SI_sample:
+    return LowerSampleIntrinsic(AMDGPUISD::SAMPLE, Op, DAG);
+  case AMDGPUIntrinsic::SI_sampleb:
+    return LowerSampleIntrinsic(AMDGPUISD::SAMPLEB, Op, DAG);
+  case AMDGPUIntrinsic::SI_sampled:
+    return LowerSampleIntrinsic(AMDGPUISD::SAMPLED, Op, DAG);
+  case AMDGPUIntrinsic::SI_samplel:
+    return LowerSampleIntrinsic(AMDGPUISD::SAMPLEL, Op, DAG);
+  case AMDGPUIntrinsic::SI_vs_load_input:
+    return DAG.getNode(AMDGPUISD::LOAD_INPUT, DL, VT,
+                       Op.getOperand(1),
+                       Op.getOperand(2),
+                       Op.getOperand(3));
+
+  case AMDGPUIntrinsic::AMDGPU_fract:
+  case AMDGPUIntrinsic::AMDIL_fraction: // Legacy name.
+    return DAG.getNode(ISD::FSUB, DL, VT, Op.getOperand(1),
+                       DAG.getNode(ISD::FFLOOR, DL, VT, Op.getOperand(1)));
+  case AMDGPUIntrinsic::SI_fs_constant: {
+    SDValue M0 = copyToM0(DAG, DAG.getEntryNode(), DL, Op.getOperand(3));
+    SDValue Glue = M0.getValue(1);
+    return DAG.getNode(AMDGPUISD::INTERP_MOV, DL, MVT::f32,
+                       DAG.getConstant(2, DL, MVT::i32), // P0
+                       Op.getOperand(1), Op.getOperand(2), Glue);
+  }
+  case AMDGPUIntrinsic::SI_fs_interp: {
+    SDValue IJ = Op.getOperand(4);
+    SDValue I = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, MVT::i32, IJ,
+                            DAG.getConstant(0, DL, MVT::i32));
+    SDValue J = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, MVT::i32, IJ,
+                            DAG.getConstant(1, DL, MVT::i32));
+    SDValue M0 = copyToM0(DAG, DAG.getEntryNode(), DL, Op.getOperand(3));
+    SDValue Glue = M0.getValue(1);
+    SDValue P1 = DAG.getNode(AMDGPUISD::INTERP_P1, DL,
+                             DAG.getVTList(MVT::f32, MVT::Glue),
+                             I, Op.getOperand(1), Op.getOperand(2), Glue);
+    Glue = SDValue(P1.getNode(), 1);
+    return DAG.getNode(AMDGPUISD::INTERP_P2, DL, MVT::f32, P1, J,
+                             Op.getOperand(1), Op.getOperand(2), Glue);
+  }
+  default:
+    return AMDGPUTargetLowering::LowerOperation(Op, DAG);
+  }
+
 }
 
 SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
@@ -1331,8 +1335,10 @@ SDValue SITargetLowering::LowerFastFDIV(SDValue Op, SelectionDAG &DAG) const {
   if (Unsafe) {
     // Turn into multiply by the reciprocal.
     // x / y -> x * (1.0 / y)
+    SDNodeFlags Flags;
+    Flags.setUnsafeAlgebra(true);
     SDValue Recip = DAG.getNode(AMDGPUISD::RCP, SL, VT, RHS);
-    return DAG.getNode(ISD::FMUL, SL, VT, LHS, Recip);
+    return DAG.getNode(ISD::FMUL, SL, VT, LHS, Recip, &Flags);
   }
 
   return SDValue();
@@ -1368,6 +1374,8 @@ SDValue SITargetLowering::LowerFDIV32(SDValue Op, SelectionDAG &DAG) const {
   SDValue r2 = DAG.getSetCC(SL, SetCCVT, r1, K0, ISD::SETOGT);
 
   SDValue r3 = DAG.getNode(ISD::SELECT, SL, MVT::f32, r2, K1, One);
+
+  // TODO: Should this propagate fast-math-flags?
 
   r1 = DAG.getNode(ISD::FMUL, SL, MVT::f32, RHS, r3);
 
@@ -1488,6 +1496,7 @@ SDValue SITargetLowering::LowerTrig(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT VT = Op.getValueType();
   SDValue Arg = Op.getOperand(0);
+  // TODO: Should this propagate fast-math-flags?
   SDValue FractPart = DAG.getNode(AMDGPUISD::FRACT, DL, VT,
                                   DAG.getNode(ISD::FMUL, DL, VT, Arg,
                                               DAG.getConstantFP(0.5/M_PI, DL,
