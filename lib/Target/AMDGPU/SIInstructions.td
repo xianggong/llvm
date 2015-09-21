@@ -2062,7 +2062,7 @@ def SI_CONSTDATA_PTR : InstSI <
 
 } // end SubtargetPredicate = isGCN
 
-// Pattern to for load from global memory address 
+// Pattern to load from global memory address 
 def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
 
 // Global load pattern
@@ -2124,10 +2124,15 @@ def : Pat <
 /* Multi2Sim */
 //
 // Pattern to load data from imm constant buffers
-def : Pat <
-  (m2s_load_imm_const v4i32:$sbase, i32:$offset),
-  (S_BUFFER_LOAD_DWORD_IMM $sbase, (as_i32imm $offset))
+
+class LoadImmConstM2S<SMRD opcode, ValueType vt> : Pat <
+  (vt (m2s_load_imm_const v4i32:$sbase, i32:$offset)),
+  (opcode $sbase, (as_i32imm $offset))
 >;
+
+def ImmConstLoadi32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORD_IMM, i32>;
+def ImmConstLoadv2i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX2_IMM, v2i32>;
+def ImmConstLoadv4i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4i32>;
 
 //===----------------------------------------------------------------------===//
 // SMRD Patterns

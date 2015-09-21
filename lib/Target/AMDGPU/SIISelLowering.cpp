@@ -2573,23 +2573,21 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
       SDValue Arg;
       SDValue extArg;
 
-      if (VT == MVT::i64)
-      {
+      // Pointers
+      if (VT == MVT::i64) {
         // Read from imm_const_buffer_0
         Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
                                  SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
 
         // Need to return MVT::i64
-        extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);        
-      }
-      else if (VT == MVT::i32)
-      {
+        extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);
+      } else {
         // Read from imm_const_buffer_1
-        Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
+        Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
                                  SIRegisterInfo::IMM_CONST_BUFFER_ONE);
         extArg = Arg;
       }
-      
+
       Chains.push_back(Arg.getValue(1));
       InVals.push_back(extArg);
       continue;
