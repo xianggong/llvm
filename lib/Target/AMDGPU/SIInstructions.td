@@ -2062,6 +2062,20 @@ def SI_CONSTDATA_PTR : InstSI <
 
 } // end SubtargetPredicate = isGCN
 
+/* Multi2Sim */
+//
+
+// Pattern to load data from imm constant buffers
+
+class LoadImmConstM2S<SMRD opcode, ValueType vt> : Pat <
+  (vt (m2s_load_imm_const v4i32:$sbase, i32:$offset)),
+  (opcode $sbase, (as_i32imm $offset))
+>;
+
+def ImmConstLoadi32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORD_IMM, i32>;
+def ImmConstLoadv2i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX2_IMM, v2i32>;
+def ImmConstLoadv4i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4i32>;
+
 // Pattern to load from global memory address 
 def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
 
@@ -2093,6 +2107,19 @@ def GlobalStorei32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_X, i32>;
 def GlobalStorev2i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XY, v2i32>;
 def GlobalStorev4i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XYZW, v4i32>;
 
+// Constant load pattern, same routine as global load
+class ConstantLoadM2S <MTBUF opcode, ValueType vt> : Pat <
+    (vt (constant_load (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, i1:$idxen, 
+                                     i1:$addr64, i8:$dfmt, i8:$nfmt, i32:$vaddr, 
+                                     v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset))),
+    (opcode $offset, $offen, $glc, $idxen, $addr64, $dfmt, 
+                         $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset)
+>;
+
+def ConstantLoadi32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_X, i32>;
+def ConstantLoadv2i32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
+def ConstantLoadv4i32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
+
 let Predicates = [isGCN] in {
 
 def : Pat<
@@ -2120,19 +2147,6 @@ def : Pat <
   (EXP imm:$en, imm:$tgt, imm:$compr, imm:$done, imm:$vm,
        $src0, $src1, $src2, $src3)
 >;
-
-/* Multi2Sim */
-//
-// Pattern to load data from imm constant buffers
-
-class LoadImmConstM2S<SMRD opcode, ValueType vt> : Pat <
-  (vt (m2s_load_imm_const v4i32:$sbase, i32:$offset)),
-  (opcode $sbase, (as_i32imm $offset))
->;
-
-def ImmConstLoadi32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORD_IMM, i32>;
-def ImmConstLoadv2i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX2_IMM, v2i32>;
-def ImmConstLoadv4i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4i32>;
 
 //===----------------------------------------------------------------------===//
 // SMRD Patterns

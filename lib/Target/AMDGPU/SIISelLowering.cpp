@@ -2573,7 +2573,7 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
       SDValue Arg;
       SDValue extArg;
 
-      // Pointers
+      // __global/__constant pointers are i64 typed
       if (VT == MVT::i64) {
         // Read from imm_const_buffer_0
         Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
@@ -2581,6 +2581,8 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
 
         // Need to return MVT::i64
         extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);
+
+        // For pointers, only return a constant contains index
       } else {
         // Read from imm_const_buffer_1
         Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
