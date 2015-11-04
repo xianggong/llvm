@@ -1645,6 +1645,73 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
       // Then replace i64 ISD::ADD with i32 one
       // Operand 0 Should be an i32 value from M2S_LOAD_IMM_CONST
       SDValue AddOperand0 = Para.getValue(0);
+      if (AddOperand0.getValueType() != MVT::i32) {
+        // Operand 1 should be a i32 typed node
+        SDValue AddOperand1 = N1.getValueType() == MVT::i32 ? N1 : NewShl;
+        SDValue Ops[] = {AddOperand0, AddOperand1};
+        SDValue NewAdd = SDValue(
+            CurDAG->getMachineNode(AMDGPU::V_ADD_I32_e32, DL, MVT::i32, Ops),
+            0);
+        CurDAG->ReplaceAllUsesOfValueWith(In, NewAdd);
+
+        // This new ADD node is used for vaddr
+        vaddr = NewAdd;
+      } else
+        vaddr = AddOperand0;
+
+      return true;
+    }
+    // If coming from other basic blocks
+    else
+    {
+      // Get which registers are used
+      // SDValue Reg = N0.getOperand(0);
+      // unsigned reg = Reg.getReg();
+
+      // Search this register in entry basic block     
+      // Should come from a copyToReg node
+      // Trace back to a M2S_LOAD_IMM_CONST node
+      // The operand 1: offset node is what we want
+      // Replace with UAV related instructions
+
+      // Test only
+      SDValue Para = N0.getOperand(0);
+
+      // Need to remove chain if exists
+      for (unsigned i = 0; i < N0.getNumOperands(); ++i) {
+        SDValue op = N0.getOperand(i);
+        if (op.getValueType() == MVT::Other) {
+          CurDAG->ReplaceAllUsesOfValueWith(op, CurDAG->getUNDEF(MVT::i32));
+        }
+      }
+
+      const SITargetLowering &Lowering =
+          *static_cast<const SITargetLowering *>(getTargetLowering());
+
+      srsrc = Lowering.getM2SUav(*CurDAG, SDLoc(Para), Para.getValue(1), 1);
+
+      // Enable offset mode, use vaddr
+      offen = CurDAG->getTargetConstant(1, DL, MVT::i1);
+
+      SDValue NewShl;
+      if (N1.getValueType() == MVT::i64) {
+        // An i64 value from ISD::SHL node, we need to replace this
+        // node with corresponding i32 one
+        SDValue NewShlOperand0 = N1.getOperand(0).getOperand(0);
+        SDValue NewShlOperand1 = N1.getOperand(1);
+        SDValue NewShlOps[] = {NewShlOperand0, NewShlOperand1};
+        NewShl = SDValue(CurDAG->getMachineNode(AMDGPU::V_LSHLREV_B32_e32_si,
+                                                DL, MVT::i32, NewShlOps),
+                         0);
+        CurDAG->ReplaceAllUsesOfValueWith(N1, NewShl);
+      }
+
+      SDValue BasePtr = NewShl.getOperand(0);
+      CurDAG->ReplaceAllUsesOfValueWith(N0, BasePtr);
+
+      // Then replace i64 ISD::ADD with i32 one
+      // Operand 0 Should be an i32 value from M2S_LOAD_IMM_CONST
+      SDValue AddOperand0 = BasePtr.getValue(0);
       // Operand 1 should be a i32 typed node
       SDValue AddOperand1 = N1.getValueType() == MVT::i32 ? N1 : NewShl;
       SDValue Ops[] = {AddOperand0, AddOperand1};

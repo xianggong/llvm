@@ -2539,7 +2539,7 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
     unsigned ImmConstBufferOneSub3 =
         TRI->getPhysRegSubReg(ImmConstBufferOne, &AMDGPU::SReg_32RegClass, 3);
 
-    // Mark register as allocated
+    // Mark registers as allocated
     CCInfo.AllocateReg(PtrUavTableSub0);
     CCInfo.AllocateReg(PtrUavTableSub1);
     CCInfo.AllocateReg(ImmConstBufferZeroSub0);
@@ -2559,7 +2559,6 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
 
   SmallVector<SDValue, 16> Chains;
 
-  // All parameters will be loaded into 1 SGPR, using s_buffer_load_dword
   for (unsigned i = 0, ArgIdx = 0; i != Ins.size(); ++i) {
 
     CCValAssign &VA = ArgLocs[ArgIdx++];
@@ -2582,7 +2581,6 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
         // Need to return MVT::i64
         extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);
 
-        // For pointers, only return a constant contains index
       } else {
         // Read from imm_const_buffer_1
         Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
