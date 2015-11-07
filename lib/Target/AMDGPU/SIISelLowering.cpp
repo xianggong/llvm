@@ -2495,6 +2495,8 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
       static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
 
   MachineFunction &MF = DAG.getMachineFunction();
+  FunctionType *FType = MF.getFunction()->getFunctionType();
+
   SIMachineFunctionInfo *Info = MF.getInfo<SIMachineFunctionInfo>();
 
   assert(CallConv == CallingConv::C);
@@ -2572,24 +2574,30 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
       SDValue Arg;
       SDValue extArg;
 
-      // __global/__constant pointers are i64 typed
-      if (VT == MVT::i64) {
-        // Read from imm_const_buffer_0
-        Arg = getM2SReadImmConst(DAG, MVT::i32, DL, Chain, Offset,
-                                 SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
+      // Get address space information
+      auto *ParamTy =
+          dyn_cast<PointerType>(FType->getParamType(Ins[i].getOrigArgIndex()));
 
-        // Need to return MVT::i64
-        extArg = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Arg);
-
-      } else {
-        // Read from imm_const_buffer_1
-        Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
-                                 SIRegisterInfo::IMM_CONST_BUFFER_ONE);
-        extArg = Arg;
+      // All address space should be i32 if using M2S as OS in triple
+      if (ParamTy && VT == MVT::i32) {
+        switch (ParamTy->getAddressSpace()) {
+        // __global/__constant read from imm_const_buffer_0
+        case AMDGPUAS::GLOBAL_ADDRESS:
+        case AMDGPUAS::CONSTANT_ADDRESS: {
+          Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
+                                   SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
+          break;
+        }
+        // Others read from imm_const_buffer_1
+        default: {
+          Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
+                                   SIRegisterInfo::IMM_CONST_BUFFER_ONE);
+          break;
+        }
+        }
       }
-
       Chains.push_back(Arg.getValue(1));
-      InVals.push_back(extArg);
+      InVals.push_back(Arg);
       continue;
     }
   }

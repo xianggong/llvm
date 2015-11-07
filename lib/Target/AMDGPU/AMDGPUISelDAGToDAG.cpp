@@ -1611,7 +1611,28 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
     SDValue N0 = In.getOperand(0);
     SDValue N1 = In.getOperand(1);
 
-    if (N0.getOpcode() == ISD::SIGN_EXTEND) {
+    // In node should be an add of an i32 M2S_LOAD_IMM_CONST node (base) and an
+    // i32 offset node
+    if (In.getValueType() == MVT::i32) {
+      // Get UAV index from operand 2 of M2S_LOAD_IMM_CONST node
+      SDValue uavIdx = N0.getOperand(2);
+      unsigned UavIdxNum =
+          (cast<ConstantSDNode>(uavIdx)->getZExtValue() >> 2);
+
+      const SITargetLowering &Lowering =
+          *static_cast<const SITargetLowering *>(getTargetLowering());
+
+      // Get UAV resource description from 4 SRegs
+      srsrc =
+          Lowering.getM2SUav(*CurDAG, SDLoc(N0), N0.getValue(1), UavIdxNum);
+
+      // Enable offset mode, use vaddr
+      offen = CurDAG->getTargetConstant(1, DL, MVT::i1);
+
+      vaddr = In;
+
+      return true;       
+    } else if (N0.getOpcode() == ISD::SIGN_EXTEND) {
       SDValue Para = N0.getOperand(0);
 
       // Get UAV index
