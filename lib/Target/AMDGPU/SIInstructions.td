@@ -2062,8 +2062,7 @@ def SI_CONSTDATA_PTR : InstSI <
 
 } // end SubtargetPredicate = isGCN
 
-/* Multi2Sim */
-//
+/* Multi2Sim related code begin */
 
 // Pattern to load data from imm constant buffers
 
@@ -2119,6 +2118,29 @@ class ConstantLoadM2S <MTBUF opcode, ValueType vt> : Pat <
 def ConstantLoadi32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_X, i32>;
 def ConstantLoadv2i32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
 def ConstantLoadv4i32 : ConstantLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
+
+/* Multi2sim pseudo instructions */
+let isCodeGenOnly = 1, isPseudo = 1 in {
+let mayLoad = 1, mayStore = 1, hasSideEffects = 1 in {
+let Uses = [EXEC], Defs = [EXEC] in {
+
+def SI_M2S_GET_UAV_DESC: InstSI <
+  (outs SReg_128:$uavDesc),
+  (ins u32imm:$addrspace, u32imm:$paraIndex),
+  "",
+  [(set v4i32:$uavDesc, (int_SI_m2s_get_uav_desc i32:$addrspace, i32:$paraIndex))]
+>;
+
+def SI_M2S_PAC_UAV_DESC: InstSI <
+  (outs SReg_32:$packedOffset),
+  (ins SReg_32:$origOffset, SReg_128:$uavDesc),
+  "",
+  [(set i32:$packedOffset, (int_SI_m2s_pac_uav_desc i32:$origOffset, v4i32:$uavDesc))]
+>;
+
+}
+}
+}
 
 let Predicates = [isGCN] in {
 

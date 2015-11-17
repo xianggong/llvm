@@ -246,6 +246,7 @@ bool GCNPassConfig::addPreISel() {
   addPass(createSinkingPass());
   addPass(createSITypeRewriter());
   addPass(createSIAnnotateControlFlowPass());
+  addPass(createSIM2SAnnotateUAVPass());
   return false;
 }
 

@@ -42,6 +42,7 @@ add_llvm_target(AMDGPUCodeGen
   R600RegisterInfo.cpp
   R600TextureIntrinsicsReplacer.cpp
   SIAnnotateControlFlow.cpp
+  SIM2SAnnotateUAV.cpp
   SIFixControlFlowLiveIntervals.cpp
   SIFixSGPRCopies.cpp
   SIFixSGPRLiveRanges.cpp
@@ -51,6 +52,7 @@ add_llvm_target(AMDGPUCodeGen
   SIISelLowering.cpp
   SILoadStoreOptimizer.cpp
   SILowerControlFlow.cpp
+  SILowerUAV.cpp
   SILowerI1Copies.cpp
   SIMachineFunctionInfo.cpp
   SIPrepareScratchRegs.cpp

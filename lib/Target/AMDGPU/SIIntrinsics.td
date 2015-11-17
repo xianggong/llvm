@@ -196,4 +196,8 @@ let TargetPrefix = "SI", isTarget = 1 in {
   def int_SI_else_break : Intrinsic<[llvm_i64_ty], [llvm_i64_ty, llvm_i64_ty], []>;
   def int_SI_loop : Intrinsic<[], [llvm_i64_ty, llvm_empty_ty], []>;
   def int_SI_end_cf : Intrinsic<[], [llvm_i64_ty], []>;
+
+  /* Multi2Sim Intrinsics for UAV buffer description */
+  def int_SI_m2s_get_uav_desc : Intrinsic<[llvm_v4i32_ty], [llvm_i32_ty, llvm_i32_ty], []>;
+  def int_SI_m2s_pac_uav_desc : Intrinsic<[llvm_i32_ty], [llvm_i32_ty, llvm_v4i32_ty], []>;
 }
