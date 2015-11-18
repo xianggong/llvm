@@ -281,6 +281,7 @@ void GCNPassConfig::addPreRegAlloc() {
   }
   addPass(createSIShrinkInstructionsPass(), false);
   addPass(createSIFixSGPRLiveRangesPass());
+  addPass(createSILowerUAVPass(*TM), false);  
 }
 
 void GCNPassConfig::addPostRegAlloc() {

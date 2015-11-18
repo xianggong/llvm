@@ -2553,6 +2553,8 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
     CCInfo.AllocateReg(ImmConstBufferOneSub2);
     CCInfo.AllocateReg(ImmConstBufferOneSub3);
 
+    // Add livein registers
+    MF.addLiveIn(PtrUavTable, &AMDGPU::SReg_64RegClass);
     MF.addLiveIn(ImmConstBufferZero, &AMDGPU::SReg_128RegClass);
     MF.addLiveIn(ImmConstBufferOne, &AMDGPU::SReg_128RegClass);
   }

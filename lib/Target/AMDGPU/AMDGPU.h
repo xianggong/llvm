@@ -44,6 +44,7 @@ FunctionPass *createSILowerI1CopiesPass();
 FunctionPass *createSIShrinkInstructionsPass();
 FunctionPass *createSILoadStoreOptimizerPass(TargetMachine &tm);
 FunctionPass *createSILowerControlFlowPass(TargetMachine &tm);
+FunctionPass *createSILowerUAVPass(TargetMachine &tm);
 FunctionPass *createSIFixControlFlowLiveIntervalsPass();
 FunctionPass *createSIFixSGPRCopiesPass(TargetMachine &tm);
 FunctionPass *createSIFixSGPRLiveRangesPass();
