@@ -246,7 +246,9 @@ bool GCNPassConfig::addPreISel() {
   addPass(createSinkingPass());
   addPass(createSITypeRewriter());
   addPass(createSIAnnotateControlFlowPass());
-  addPass(createSIM2SAnnotateUAVPass());
+  const AMDGPUSubtarget &ST = *getAMDGPUTargetMachine().getSubtargetImpl();
+  if (ST.isM2S())
+    addPass(createSIM2SAnnotateUAVPass());
   return false;
 }
 
@@ -281,7 +283,8 @@ void GCNPassConfig::addPreRegAlloc() {
   }
   addPass(createSIShrinkInstructionsPass(), false);
   addPass(createSIFixSGPRLiveRangesPass());
-  addPass(createSILowerUAVPass(*TM), false);  
+  if (ST.isM2S())
+    addPass(createSILowerUAVPass(*TM), false);  
 }
 
 void GCNPassConfig::addPostRegAlloc() {

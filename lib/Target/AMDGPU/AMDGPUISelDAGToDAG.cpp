@@ -1612,44 +1612,24 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
   // In node should be an i32 ADD node, transform from getelementptr
   if ((In.getOpcode() == ISD::ADD) && (In.getValueType() == MVT::i32)) {
 
-    SDValue N0 = In.getOperand(0);
+    // SDValue N0 = In.getOperand(0);
     SDValue N1 = In.getOperand(1);
 
-    // Entry basicblock
-    // N0 should be an i32 M2S_LOAD_IMM_CONST node (base)
-    // N1 should be an i32 node (offset)
-    // If N0 is a M2S_LOAD_IMM_CONST node, it's in entry basic block
-    if (N0.getOpcode() == AMDGPUISD::M2S_LOAD_IMM_CONST) {
-      // Get UAV index from operand 2 of M2S_LOAD_IMM_CONST node
-      SDValue uavIdx = N0.getOperand(2);
-      unsigned UavIdxNum =
-          (cast<ConstantSDNode>(uavIdx)->getZExtValue() >> 2);
-
-      const SITargetLowering &Lowering =
-          *static_cast<const SITargetLowering *>(getTargetLowering());
-
-      // Get UAV resource description from 4 SRegs
-      srsrc =
-          Lowering.getM2SUav(*CurDAG, SDLoc(N0), N0.getValue(1), UavIdxNum);
-
-      vaddr = In;
-
-      return true;
-    } 
-    // Otherwise it's in other basic blocks
-    else if (N0.getOpcode() == ISD::CopyFromReg && N1.getOpcode() == ISD::SHL) {
-
+    if (N1.getOpcode() == ISD::SHL) {
       // Need to get rid of the dummy llvm.SI.m2s.pac.uav.desc node, which has
       // UAV srsrc and base addr as its two operands
-      // 
       SDValue packedAddr = N1.getOperand(0);
+
+      // Early termination if not an instrinsic function
+      if (packedAddr.getOpcode() != ISD::INTRINSIC_W_CHAIN)
+        return false;
+
       // SDValue addrSpace = packedAddr.getOperand(1);
-      SDValue origBase = packedAddr.getOperand(2);
+      SDValue origOffset = packedAddr.getOperand(2);
       SDValue uavDesc = packedAddr.getOperand(3);
 
-      // Replace SHL with origBase
-      SDValue ops[] = {origBase, N1.getOperand(1)};
-      // SDValue newSHL = CurDAG->getNode(ISD::SHL, SDLoc(N1), MVT::i32, ops);
+      // Replace SHL with origOffset
+      SDValue ops[] = {origOffset, N1.getOperand(1)};
       SDValue newSHL = SDValue(
           CurDAG->getMachineNode(AMDGPU::S_LSHL_B32, SDLoc(N1), MVT::i32, ops),
           0);
@@ -1658,6 +1638,7 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
       // Get UAV resource description from 4 SRegs
       srsrc = uavDesc;
       vaddr = In;
+  
       return true;
     }
   }

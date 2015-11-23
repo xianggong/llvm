@@ -2412,13 +2412,13 @@ SITargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
 //                         Multi2Sim related code
 //===----------------------------------------------------------------------===//
 
-// Most workitem functions load data imm_const_buffer_1 with offset
+// Most workitem functions load data imm_const_buffer_0 with offset
 // 's_buffer_load_dword s[?], S[4:7], offset'
 SDValue SITargetLowering::getM2SMetadata(SelectionDAG &DAG, EVT VT, EVT MemVT,
                                          SDLoc DL, SDValue Chain,
                                          unsigned Offset, bool Signed) const {
   return getM2SReadImmConst(DAG, VT, DL, Chain, Offset >> 2,
-                            SIRegisterInfo::IMM_CONST_BUFFER_ONE);
+                            SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
 }
 
 // Read from imm constant buffer with offset
@@ -2495,7 +2495,6 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
       static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
 
   MachineFunction &MF = DAG.getMachineFunction();
-  FunctionType *FType = MF.getFunction()->getFunctionType();
 
   SIMachineFunctionInfo *Info = MF.getInfo<SIMachineFunctionInfo>();
 
@@ -2571,36 +2570,16 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
     if (VA.isMemLoc()) {
       VT = Ins[i].VT;
 
-      const unsigned Offset = VA.getLocMemOffset() >> 1;
-
-      SDValue Arg;
-      SDValue extArg;
-
-      // Get address space information
-      auto *ParamTy =
-          dyn_cast<PointerType>(FType->getParamType(Ins[i].getOrigArgIndex()));
+      const unsigned Offset = VA.getLocMemOffset();
 
       // All address space should be i32 if using M2S as OS in triple
-      if (ParamTy && VT == MVT::i32) {
-        switch (ParamTy->getAddressSpace()) {
-        // __global/__constant read from imm_const_buffer_0
-        case AMDGPUAS::GLOBAL_ADDRESS:
-        case AMDGPUAS::CONSTANT_ADDRESS: {
-          Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
-                                   SIRegisterInfo::IMM_CONST_BUFFER_ZERO);
-          break;
-        }
-        // Others read from imm_const_buffer_1
-        default: {
-          Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
-                                   SIRegisterInfo::IMM_CONST_BUFFER_ONE);
-          break;
-        }
-        }
+      if (VT == MVT::i32) {
+        // Read offset information from imm_const_buffer_1
+        SDValue Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
+                                         SIRegisterInfo::IMM_CONST_BUFFER_ONE);
+        Chains.push_back(Arg.getValue(1));
+        InVals.push_back(Arg);
       }
-      Chains.push_back(Arg.getValue(1));
-      InVals.push_back(Arg);
-      continue;
     }
   }
 

@@ -87,34 +87,36 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
   BasicBlock &EntryBlock = F.getEntryBlock();
   auto &Args = F.getArgumentList();
   for (auto &Arg : Args) {
-    // Get argument number and address space for get.uav intrinsic function
-    unsigned ArgNum = Arg.getArgNo();
+    // Get argument index and address space for get.uav intrinsic function
+    unsigned ArgIdx = Arg.getArgNo();
+
     auto *ArgType =
-        dyn_cast<PointerType>(F.getFunctionType()->getParamType(ArgNum));
-    unsigned ArgAddrSpace = ArgType->getAddressSpace();
+        dyn_cast<PointerType>(F.getFunctionType()->getParamType(ArgIdx));
+    if (ArgType) {
+      unsigned ArgAddrSpace = ArgType->getAddressSpace();
 
-    switch (ArgAddrSpace) {
-    // __global/__constant read from imm_const_buffer_0
-    case AMDGPUAS::GLOBAL_ADDRESS:
-    case AMDGPUAS::CONSTANT_ADDRESS: {
-      Value *CallInstArgs[] = {ConstantInt::get(Int32, ArgAddrSpace),
-                               ConstantInt::get(Int32, ArgNum)};
-      CallInst *CallGetUAV =
-          CallInst::Create(GetUavDesc, CallInstArgs, "uav." + Arg.getName(),
-                           EntryBlock.getFirstInsertionPt());
-      if (!CallGetUAV)
-        return false;
+      switch (ArgAddrSpace) {
+      // __global/__constant read from imm_const_buffer_0
+      case AMDGPUAS::GLOBAL_ADDRESS:
+      case AMDGPUAS::CONSTANT_ADDRESS: {
+        Value *CallInstArgs[] = {ConstantInt::get(Int32, ArgAddrSpace),
+                                 ConstantInt::get(Int32, ArgIdx)};
+        CallInst *CallGetUAV =
+            CallInst::Create(GetUavDesc, CallInstArgs, "uav." + Arg.getName(),
+                             EntryBlock.getFirstInsertionPt());
+        if (!CallGetUAV)
+          return false;
 
-      // Store in UAV map for later lookup
-      UAVMap[CallGetUAV->getName().str()] = CallGetUAV;
-      break;
-    }
-    // Others read from imm_const_buffer_1
-    default: {
-      // TODO: not implemented yet
-      return false;
-      break;
-    }
+        // Store in UAV map for later lookup
+        UAVMap[CallGetUAV->getName().str()] = CallGetUAV;
+        break;
+      }
+      // Others read from imm_const_buffer_1
+      default: {
+        // TODO: not implemented yet
+        break;
+      }
+      }
     }
   }
 
@@ -126,7 +128,7 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         Value *GEPPtr = GEP->getPointerOperand();
         std::string UAVNameGEPPtr = "uav." + GEPPtr->getName().str();
         if (UAVMap.find(UAVNameGEPPtr) == UAVMap.end())
-          return false;
+          continue;
 
         // Create CallInst and insert before GEP
         Value *GEPIdx = *(GEP->idx_begin());
@@ -148,6 +150,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         InstsToErase.push_back(GEP);
       }
   }
+
+  // Need to handle the situation of direct st/ld without getelementptr
 
   // We are done, remove those instructions in erase list
   for (unsigned i = 0; i < InstsToErase.size(); ++i) {
