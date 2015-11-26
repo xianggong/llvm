@@ -27,10 +27,6 @@ using namespace llvm;
 
 namespace {
 
-// Complex types used in this pass
-typedef std::pair<BasicBlock *, Value *> StackEntry;
-typedef SmallVector<StackEntry, 16> StackVector;
-
 // Intrinsic names the UAV is annotated with
 static const char *const getUavDescIntrinsic = "llvm.SI.m2s.get.uav.desc";
 static const char *const pacUavDescIntrinsic = "llvm.SI.m2s.pac.uav.desc";
@@ -81,8 +77,7 @@ bool SIM2SAnnotateUAV::doInitialization(Module &M) {
 /// \brief Annotate the getElementPtr with M2S UAV intrinsics
 bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
 
-  std::map<std::string, CallInst *> UAVMap;
-  std::map<GetElementPtrInst *, CallInst *> GEPMap;
+  std::map<Value *, CallInst *> UAVMap;
 
   // EntryBlock: get UAV buffer descriptors
   BasicBlock &EntryBlock = F.getEntryBlock();
@@ -109,7 +104,7 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
           return false;
 
         // Store in UAV map for later lookup
-        UAVMap[CallGetUAV->getName().str()] = CallGetUAV;
+        UAVMap[&Arg] = CallGetUAV;
         break;
       }
       // Others read from imm_const_buffer_1
@@ -119,21 +114,6 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
       }
       }
     }
-  }
-
-  // All basic blocks: find the mapping of GEP and get.uav calls
-  for (auto &BB : F.getBasicBlockList()) {
-    for (BasicBlock::iterator i = BB.begin(), e = BB.end(); i != e; ++i)
-      if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&*i)) {
-        // Get GEP pointer operand name and search in the UAV map
-        Value *GEPPtr = GEP->getPointerOperand();
-        std::string UAVNameGEPPtr = "uav." + GEPPtr->getName().str();
-        if (UAVMap.find(UAVNameGEPPtr) == UAVMap.end())
-          continue;
-
-        // Add the pair to GEPMap so we can get the
-        GEPMap[GEP] = UAVMap[UAVNameGEPPtr];
-      }
   }
 
   // All basic blocks: need to pack UAV buffer descriptor
@@ -155,29 +135,34 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         Value *Arg1 = nullptr;
 
         // First check if LD pointer operand is coming directly from parameter
-        std::string UAVName = "uav." + LDPtrOp->getName().str();
-        if (UAVMap.find(UAVName) != UAVMap.end())
-          Arg1 = UAVMap[UAVName];
+        if (UAVMap.find(LDPtrOp) != UAVMap.end())
+          Arg1 = UAVMap[LDPtrOp];
         else {
           // Other possibilities: GEP/BitCast/PhiNode
-          auto *GEPPtr = dyn_cast<GetElementPtrInst>(LDPtrOp);
+          auto *GEP = dyn_cast<GetElementPtrInst>(LDPtrOp);
           auto *BC = dyn_cast<BitCastInst>(LDPtrOp);
           auto *PN = dyn_cast<PHINode>(LDPtrOp);
-          while (!GEPPtr && (BC || PN)) {
+          while (!Arg1) {
             if (BC) {
-              GEPPtr = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
+              GEP = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
               PN = dyn_cast<PHINode>(BC->getOperand(0));
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
             }
             if (PN) {
-              GEPPtr = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
+              GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
             }
+            if (GEP) {
+              auto GEPOp = GEP->getPointerOperand();
+              if (UAVMap.find(GEPOp) != UAVMap.end())
+                Arg1 = UAVMap[GEPOp];
+              else {
+                PN = dyn_cast<PHINode>(GEP->getPointerOperand());
+                BC = dyn_cast<BitCastInst>(GEP->getPointerOperand());
+              }
+            }
           }
-          if (GEPMap.find(GEPPtr) == GEPMap.end())
-            continue;
-          Arg1 = GEPMap[GEPPtr];
         }
 
         // Create CallInst and insert before LD
@@ -186,8 +171,11 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         PacUavDesc =
             M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
                                    Vector4Int32, (Type *)nullptr);
+        std::string CallInstName = Arg0->hasName()
+                                       ? Arg0->getName().str()
+                                       : std::to_string(Arg0->getValueID());
         CallInst *CallPacUAV =
-            CallInst::Create(PacUavDesc, Args, "pac." + Arg0->getName(), LD);
+            CallInst::Create(PacUavDesc, Args, "pac." + CallInstName, LD);
         if (!CallPacUAV)
           return false;
 
@@ -209,29 +197,34 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         Value *Arg1 = nullptr;
 
         // First check if ST pointer operand is coming directly from parameter
-        std::string UAVName = "uav." + STPtrOp->getName().str();
-        if (UAVMap.find(UAVName) != UAVMap.end())
-          Arg1 = UAVMap[UAVName];
+        if (UAVMap.find(STPtrOp) != UAVMap.end())
+          Arg1 = UAVMap[STPtrOp];
         else {
           // Other possibilities: GEP/BitCast/PhiNode
-          auto *GEPPtr = dyn_cast<GetElementPtrInst>(STPtrOp);
+          auto *GEP = dyn_cast<GetElementPtrInst>(STPtrOp);
           auto *BC = dyn_cast<BitCastInst>(STPtrOp);
           auto *PN = dyn_cast<PHINode>(STPtrOp);
-          while (!GEPPtr && (BC || PN)) {
+          while (!Arg1) {
             if (BC) {
-              GEPPtr = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
+              GEP = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
               PN = dyn_cast<PHINode>(BC->getOperand(0));
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
             }
             if (PN) {
-              GEPPtr = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
+              GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
             }
+            if (GEP) {
+              auto GEPOp = GEP->getPointerOperand();
+              if (UAVMap.find(GEPOp) != UAVMap.end())
+                Arg1 = UAVMap[GEPOp];
+              else {
+                PN = dyn_cast<PHINode>(GEP->getPointerOperand());
+                BC = dyn_cast<BitCastInst>(GEP->getPointerOperand());
+              }
+            }
           }
-          if (GEPMap.find(GEPPtr) == GEPMap.end())
-            continue;
-          Arg1 = GEPMap[GEPPtr];
         }
 
         // Create CallInst and insert before ST
@@ -240,11 +233,14 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         PacUavDesc =
             M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
                                    Vector4Int32, (Type *)nullptr);
+        std::string CallInstName = Arg0->hasName()
+                                       ? Arg0->getName().str()
+                                       : std::to_string(Arg0->getValueID());
         CallInst *CallPacUAV =
-            CallInst::Create(PacUavDesc, Args, "pac." + Arg0->getName(), ST);
+            CallInst::Create(PacUavDesc, Args, "pac." + CallInstName, ST);
         if (!CallPacUAV)
           return false;
-        
+
         // Create New ST and replaces old ST
         StoreInst *NewST = new StoreInst(ST->getValueOperand(), CallPacUAV, ST);
         ST->replaceAllUsesWith(NewST);

@@ -83,8 +83,8 @@ void SILowerUAVPass::LowerGetUAV(MachineInstr &MI, unsigned PtrUavTableRegs) {
   if (movAddrSpaceToReg)
     movAddrSpaceToReg->eraseFromParent();
   if (movIdxToReg) {
-    unsigned IdxImm = movIdxToReg->getOperand(1).getImm();
-    IdxImm += IdxImm * 8;
+    unsigned Imm = movIdxToReg->getOperand(1).getImm();
+    IdxImm += Imm * 8;
     // movIdxToReg->eraseFromParent();
   }
   // Lower it to s_load_dwordx4_imm
