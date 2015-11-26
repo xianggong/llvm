@@ -39,6 +39,8 @@ class SIM2SAnnotateUAV : public FunctionPass {
 
   static char ID;
 
+  Module *M;
+
   // Return or parameter types used in intrinsic functions
   Type *Int32;
   VectorType *Vector4Int32;
@@ -67,14 +69,12 @@ char SIM2SAnnotateUAV::ID = 0;
 /// \brief Initialize all the types and constants used in the pass
 bool SIM2SAnnotateUAV::doInitialization(Module &M) {
   LLVMContext &Context = M.getContext();
-
+  this->M = &M;
   Int32 = Type::getInt32Ty(Context);
   Vector4Int32 = VectorType::get(Int32, 4);
 
   GetUavDesc = M.getOrInsertFunction(getUavDescIntrinsic, Vector4Int32, Int32,
                                      Int32, (Type *)nullptr);
-  PacUavDesc = M.getOrInsertFunction(pacUavDescIntrinsic, Int32, Int32,
-                                     Vector4Int32, (Type *)nullptr);
   return false;
 }
 
@@ -82,6 +82,7 @@ bool SIM2SAnnotateUAV::doInitialization(Module &M) {
 bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
 
   std::map<std::string, CallInst *> UAVMap;
+  std::map<GetElementPtrInst *, CallInst *> GEPMap;
 
   // EntryBlock: get UAV buffer descriptors
   BasicBlock &EntryBlock = F.getEntryBlock();
@@ -120,7 +121,7 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
     }
   }
 
-  // All basic blocks: need to pack UAV buffer descriptor
+  // All basic blocks: find the mapping of GEP and get.uav calls
   for (auto &BB : F.getBasicBlockList()) {
     for (BasicBlock::iterator i = BB.begin(), e = BB.end(); i != e; ++i)
       if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&*i)) {
@@ -130,28 +131,113 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         if (UAVMap.find(UAVNameGEPPtr) == UAVMap.end())
           continue;
 
-        // Create CallInst and insert before GEP
-        Value *GEPIdx = *(GEP->idx_begin());
-        Value *Arg0 = GEPIdx;
-        Value *Arg1 = UAVMap[UAVNameGEPPtr];
-        Value *Args[] = {Arg0, Arg1};
-        CallInst *CallPacUAV =
-            CallInst::Create(PacUavDesc, Args, "pac." + GEPIdx->getName(), GEP);
-        if (!CallPacUAV)
-          return false;
-
-        // Create NewGEP and replaces old GEP
-        Value *Indices[] = {CallPacUAV};
-        GetElementPtrInst *NewGEP = GetElementPtrInst::Create(
-            GEP->getSourceElementType(), GEPPtr, Indices, GEP->getName(), GEP);
-        NewGEP->setIsInBounds(GEP->isInBounds());
-        GEP->replaceAllUsesWith(NewGEP);
-        // Mark as to be erased
-        InstsToErase.push_back(GEP);
+        // Add the pair to GEPMap so we can get the
+        GEPMap[GEP] = UAVMap[UAVNameGEPPtr];
       }
   }
 
-  // Need to handle the situation of direct st/ld without getelementptr
+  // All basic blocks: need to pack UAV buffer descriptor
+  for (auto &BB : F.getBasicBlockList()) {
+    for (BasicBlock::iterator i = BB.begin(), e = BB.end(); i != e; ++i) {
+      if (LoadInst *LD = dyn_cast<LoadInst>(&*i)) {
+
+        // Local address space doesn't need to use UAV
+        if (LD->getPointerAddressSpace() == AMDGPUAS::LOCAL_ADDRESS)
+          continue;
+
+        // Get LD pointer operand and find mapping in the GEP map
+        auto *GEPPtr = dyn_cast<GetElementPtrInst>(LD->getPointerOperand());
+        auto *BC = dyn_cast<BitCastInst>(LD->getPointerOperand());
+        auto *PN = dyn_cast<PHINode>(LD->getPointerOperand());
+        while (!GEPPtr) {
+          if (BC) {
+            GEPPtr = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
+            PN = dyn_cast<PHINode>(BC->getOperand(0));
+            BC = dyn_cast<BitCastInst>(BC->getOperand(0));
+          } 
+          if (PN) {
+            GEPPtr = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
+            BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
+            PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
+          }
+        }
+        if (GEPMap.find(GEPPtr) == GEPMap.end())
+          continue;
+
+        // Create CallInst and insert before LD
+        Value *Arg0 = LD->getPointerOperand();
+        Value *Arg1 = GEPMap[GEPPtr];
+        Value *Args[] = {Arg0, Arg1};
+
+        Type *PtrType = Arg0->getType();
+        PacUavDesc =
+            M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
+                                   Vector4Int32, (Type *)nullptr);
+        CallInst *CallPacUAV =
+            CallInst::Create(PacUavDesc, Args, "pac." + Arg0->getName(), LD);
+        if (!CallPacUAV)
+            return false;
+
+        // Create New LD and replaces old LD
+        LoadInst *NewLD = new LoadInst(CallPacUAV, LD->getName(), LD);
+        LD->replaceAllUsesWith(NewLD);
+        // Mark as to be erased
+        InstsToErase.push_back(LD);
+      } else if (StoreInst *ST = dyn_cast<StoreInst>(&*i)) {
+        // Local address space doesn't need to use UAV
+        if (ST->getPointerAddressSpace() == AMDGPUAS::LOCAL_ADDRESS)
+          continue;
+
+        // Get ST pointer operand and find mapping in the GEP map
+        // Notice it can come from a bitcast, so we need to take extra step
+        GetElementPtrInst *GEPPtr =
+            dyn_cast<GetElementPtrInst>(ST->getPointerOperand());
+        BitCastInst *BC = dyn_cast<BitCastInst>(ST->getPointerOperand());
+        while (!GEPPtr && BC) {
+          GEPPtr = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
+          BC = dyn_cast<BitCastInst>(BC->getOperand(0));
+        }
+        if (GEPMap.find(GEPPtr) == GEPMap.end())
+          continue;
+
+        // Create CallInst and insert before ST
+        Value *Arg0 = nullptr;
+        if (BC)
+          Arg0 = BC;
+        else 
+          Arg0 = GEPPtr;
+        Value *Arg1 = GEPMap[GEPPtr];
+        Value *Args[] = {Arg0, Arg1};
+
+        CallInst *CallPacUAV = nullptr;
+        if (BC) {
+          Type *PtrType = BC->getType();
+          PacUavDesc =
+              M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
+                                     Vector4Int32, (Type *)nullptr);
+
+          CallPacUAV = CallInst::Create(PacUavDesc, Args,
+                                        "pac." + GEPPtr->getName(), ST);
+        } else {
+          SequentialType *PtrType = GEPPtr->getType();
+          PacUavDesc =
+              M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
+                                     Vector4Int32, (Type *)nullptr);
+
+          CallPacUAV = CallInst::Create(PacUavDesc, Args,
+                                        "pac." + GEPPtr->getName(), ST);
+        }
+        if (!CallPacUAV)
+            return false;
+
+        // Create New ST and replaces old ST
+        StoreInst *NewST = new StoreInst(ST->getValueOperand(), CallPacUAV, ST);
+        ST->replaceAllUsesWith(NewST);
+        // Mark as to be erased
+        InstsToErase.push_back(ST);
+      }
+    }
+  }
 
   // We are done, remove those instructions in erase list
   for (unsigned i = 0; i < InstsToErase.size(); ++i) {

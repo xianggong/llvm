@@ -2570,16 +2570,13 @@ SDValue SITargetLowering::getM2SLowerFormalArgument(
     if (VA.isMemLoc()) {
       VT = Ins[i].VT;
 
-      const unsigned Offset = VA.getLocMemOffset();
+      const unsigned Idx = Ins[i].getOrigArgIndex() << 2;
 
-      // All address space should be i32 if using M2S as OS in triple
-      if (VT == MVT::i32) {
-        // Read offset information from imm_const_buffer_1
-        SDValue Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Offset,
-                                         SIRegisterInfo::IMM_CONST_BUFFER_ONE);
-        Chains.push_back(Arg.getValue(1));
-        InVals.push_back(Arg);
-      }
+      // Read offset information from imm_const_buffer_1
+      SDValue Arg = getM2SReadImmConst(DAG, VT, DL, Chain, Idx,
+                                       SIRegisterInfo::IMM_CONST_BUFFER_ONE);
+      Chains.push_back(Arg.getValue(1));
+      InVals.push_back(Arg);
     }
   }
 

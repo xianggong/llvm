@@ -1638,9 +1638,17 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
       // Get UAV resource description from 4 SRegs
       srsrc = uavDesc;
       vaddr = In;
-  
+
       return true;
     }
+  } else if (In.getOpcode() == ISD::INTRINSIC_W_CHAIN) {
+    SDValue N2 = In.getOperand(2);
+    SDValue N3 = In.getOperand(3);
+
+    srsrc = N3;
+    vaddr = N2;
+
+    return true;
   }
 
   return false;

@@ -199,5 +199,5 @@ let TargetPrefix = "SI", isTarget = 1 in {
 
   /* Multi2Sim Intrinsics for UAV buffer description */
   def int_SI_m2s_get_uav_desc : Intrinsic<[llvm_v4i32_ty], [llvm_i32_ty, llvm_i32_ty], []>;
-  def int_SI_m2s_pac_uav_desc : Intrinsic<[llvm_i32_ty], [llvm_i32_ty, llvm_v4i32_ty], []>;
+  def int_SI_m2s_pac_uav_desc : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, llvm_v4i32_ty], []>;
 }

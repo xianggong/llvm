@@ -66,10 +66,10 @@ void SILowerUAVPass::LowerGetUAV(MachineInstr &MI, unsigned PtrUavTableRegs) {
   // Add PtrUAVTable LiveIn and a COPY to define virtual register, otherwise it
   // is used before def and causes problem
   MBB.addLiveIn(AMDGPU::SGPR2_SGPR3);
-  
+
   // Create def only when it's not defined
   auto VRegPtrUavTable = MRI->getLiveInVirtReg(PtrUavTableRegs);
-  if(!MRI->getVRegDef(VRegPtrUavTable))
+  if (!MRI->getVRegDef(VRegPtrUavTable))
     BuildMI(MBB, &MI, DL, TII->get(TargetOpcode::COPY), VRegPtrUavTable)
         .addReg(AMDGPU::SGPR2_SGPR3);
 
@@ -85,7 +85,7 @@ void SILowerUAVPass::LowerGetUAV(MachineInstr &MI, unsigned PtrUavTableRegs) {
   if (movIdxToReg) {
     unsigned IdxImm = movIdxToReg->getOperand(1).getImm();
     IdxImm += IdxImm * 8;
-    movIdxToReg->eraseFromParent();
+    // movIdxToReg->eraseFromParent();
   }
   // Lower it to s_load_dwordx4_imm
   unsigned Dst = MI.getOperand(0).getReg();
@@ -112,9 +112,7 @@ bool SILowerUAVPass::runOnMachineFunction(MachineFunction &MF) {
       TRI->getPreloadedValue(MF, SIRegisterInfo::PTR_UAV_TABLE);
   MF.addLiveIn(PtrUavTable, &AMDGPU::SReg_64RegClass);
 
-  for (MachineFunction::iterator BI = MF.begin(), BE = MF.end(); BI != BE;
-       ++BI) {
-
+  for (auto BI = MF.begin(), BE = MF.end(); BI != BE; ++BI) {
     MachineBasicBlock &MBB = *BI;
     MachineBasicBlock::iterator I, Next;
     // 1st pass, handle GET_UAV_DESC
@@ -142,7 +140,7 @@ bool SILowerUAVPass::runOnMachineFunction(MachineFunction &MF) {
         LowerPacUAV(MI);
         break;
       }
-    }    
+    }
   }
 
   return true;
