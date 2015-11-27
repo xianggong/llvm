@@ -46,7 +46,7 @@ class SIM2SAnnotateUAV : public FunctionPass {
   Constant *PacUavDesc;
 
   // We can only erase after traverse all basic blocks
-  SmallVector<Instruction *, 4> InstsToErase;
+  std::vector<Instruction *> InstsToErase;
 
 public:
   SIM2SAnnotateUAV() : FunctionPass(ID) {}
@@ -149,6 +149,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
             }
             if (PN) {
+              if (UAVMap.find(PN->getIncomingValue(1)) != UAVMap.end())
+                Arg1 = UAVMap[PN->getIncomingValue(1)];
               GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
@@ -211,6 +213,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
             }
             if (PN) {
+              if (UAVMap.find(PN->getIncomingValue(1)) != UAVMap.end())
+                Arg1 = UAVMap[PN->getIncomingValue(1)];
               GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
@@ -251,9 +255,9 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
   }
 
   // We are done, remove those instructions in erase list
-  for (unsigned i = 0; i < InstsToErase.size(); ++i) {
-    InstsToErase[i]->eraseFromParent();
-  }
+  for (auto &Inst : InstsToErase)
+    Inst->eraseFromParent();
+  InstsToErase.clear();
 
   return true;
 }

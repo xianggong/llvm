@@ -243,12 +243,12 @@ TargetPassConfig *R600TargetMachine::createPassConfig(PassManagerBase &PM) {
 
 bool GCNPassConfig::addPreISel() {
   AMDGPUPassConfig::addPreISel();
-  addPass(createSinkingPass());
-  addPass(createSITypeRewriter());
-  addPass(createSIAnnotateControlFlowPass());
   const AMDGPUSubtarget &ST = *getAMDGPUTargetMachine().getSubtargetImpl();
   if (ST.isM2S())
     addPass(createSIM2SAnnotateUAVPass());
+  addPass(createSinkingPass());
+  addPass(createSITypeRewriter());
+  addPass(createSIAnnotateControlFlowPass());
   return false;
 }
 
@@ -263,6 +263,9 @@ bool GCNPassConfig::addInstSelector() {
 void GCNPassConfig::addPreRegAlloc() {
   const AMDGPUSubtarget &ST = *getAMDGPUTargetMachine().getSubtargetImpl();
 
+  if (ST.isM2S())
+    addPass(createSILowerUAVPass(*TM), false);
+  
   // This needs to be run directly before register allocation because
   // earlier passes might recompute live intervals.
   // TODO: handle CodeGenOpt::None; fast RA ignores spill weights set by the pass
@@ -283,8 +286,6 @@ void GCNPassConfig::addPreRegAlloc() {
   }
   addPass(createSIShrinkInstructionsPass(), false);
   addPass(createSIFixSGPRLiveRangesPass());
-  if (ST.isM2S())
-    addPass(createSILowerUAVPass(*TM), false);  
 }
 
 void GCNPassConfig::addPostRegAlloc() {
