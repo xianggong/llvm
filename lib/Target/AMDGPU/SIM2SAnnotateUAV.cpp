@@ -78,6 +78,7 @@ bool SIM2SAnnotateUAV::doInitialization(Module &M) {
 bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
 
   std::map<Value *, CallInst *> UAVMap;
+  UAVMap.clear();
 
   // EntryBlock: get UAV buffer descriptors
   BasicBlock &EntryBlock = F.getEntryBlock();
@@ -138,36 +139,45 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         if (UAVMap.find(LDPtrOp) != UAVMap.end())
           Arg1 = UAVMap[LDPtrOp];
         else {
-          // Other possibilities: GEP/BitCast/PhiNode
+          // Other possibilities: GEP/BitCast/PhiNode/IntToPtr
           auto *GEP = dyn_cast<GetElementPtrInst>(LDPtrOp);
           auto *BC = dyn_cast<BitCastInst>(LDPtrOp);
           auto *PN = dyn_cast<PHINode>(LDPtrOp);
-          while (!Arg1) {
+          auto *ITP = dyn_cast<IntToPtrInst>(LDPtrOp);
+          while (!Arg1 && (GEP || BC || PN || ITP)) {
             if (BC) {
               GEP = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
               PN = dyn_cast<PHINode>(BC->getOperand(0));
+              ITP = dyn_cast<IntToPtrInst>(BC->getOperand(0));
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
-            }
-            if (PN) {
+            } else if (PN) {
               if (UAVMap.find(PN->getIncomingValue(1)) != UAVMap.end())
                 Arg1 = UAVMap[PN->getIncomingValue(1)];
               GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
+              ITP = dyn_cast<IntToPtrInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
-            }
-            if (GEP) {
+            } else if (GEP) {
               auto GEPOp = GEP->getPointerOperand();
               if (UAVMap.find(GEPOp) != UAVMap.end())
                 Arg1 = UAVMap[GEPOp];
               else {
-                PN = dyn_cast<PHINode>(GEP->getPointerOperand());
-                BC = dyn_cast<BitCastInst>(GEP->getPointerOperand());
+                PN = dyn_cast<PHINode>(GEPOp);
+                BC = dyn_cast<BitCastInst>(GEPOp);
+                ITP = dyn_cast<IntToPtrInst>(GEPOp);
+                GEP = dyn_cast<GetElementPtrInst>(GEPOp);
               }
+            } else if (ITP) {
+              GEP = dyn_cast<GetElementPtrInst>(ITP->getOperand(0));
+              PN = dyn_cast<PHINode>(ITP->getOperand(0));
+              BC = dyn_cast<BitCastInst>(ITP->getOperand(0));
+              ITP = dyn_cast<IntToPtrInst>(ITP->getOperand(0));
             }
           }
         }
 
         // Create CallInst and insert before LD
+        assert(Arg1 && "Arg1 = nullptr");
         Value *Args[] = {Arg0, Arg1};
         Type *PtrType = Arg0->getType();
         PacUavDesc =
@@ -206,32 +216,41 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
           auto *GEP = dyn_cast<GetElementPtrInst>(STPtrOp);
           auto *BC = dyn_cast<BitCastInst>(STPtrOp);
           auto *PN = dyn_cast<PHINode>(STPtrOp);
-          while (!Arg1) {
+          auto *ITP = dyn_cast<IntToPtrInst>(STPtrOp);
+          while (!Arg1 && (GEP || BC || PN || ITP)) {
             if (BC) {
               GEP = dyn_cast<GetElementPtrInst>(BC->getOperand(0));
               PN = dyn_cast<PHINode>(BC->getOperand(0));
+              ITP = dyn_cast<IntToPtrInst>(BC->getOperand(0));
               BC = dyn_cast<BitCastInst>(BC->getOperand(0));
-            }
-            if (PN) {
+            } else if (PN) {
               if (UAVMap.find(PN->getIncomingValue(1)) != UAVMap.end())
                 Arg1 = UAVMap[PN->getIncomingValue(1)];
               GEP = dyn_cast<GetElementPtrInst>(PN->getIncomingValue(1));
               BC = dyn_cast<BitCastInst>(PN->getIncomingValue(1));
+              ITP = dyn_cast<IntToPtrInst>(PN->getIncomingValue(1));
               PN = dyn_cast<PHINode>(PN->getIncomingValue(1));
-            }
-            if (GEP) {
+            } else if (GEP) {
               auto GEPOp = GEP->getPointerOperand();
               if (UAVMap.find(GEPOp) != UAVMap.end())
                 Arg1 = UAVMap[GEPOp];
               else {
-                PN = dyn_cast<PHINode>(GEP->getPointerOperand());
-                BC = dyn_cast<BitCastInst>(GEP->getPointerOperand());
+                PN = dyn_cast<PHINode>(GEPOp);
+                BC = dyn_cast<BitCastInst>(GEPOp);
+                ITP = dyn_cast<IntToPtrInst>(GEPOp);
+                GEP = dyn_cast<GetElementPtrInst>(GEPOp);
               }
+            } else if (ITP) {
+              GEP = dyn_cast<GetElementPtrInst>(ITP->getOperand(0));
+              PN = dyn_cast<PHINode>(ITP->getOperand(0));
+              BC = dyn_cast<BitCastInst>(ITP->getOperand(0));
+              ITP = dyn_cast<IntToPtrInst>(ITP->getOperand(0));
             }
           }
         }
 
         // Create CallInst and insert before ST
+        assert(Arg1 && "Arg1 = nullptr");
         Value *Args[] = {Arg0, Arg1};
         Type *PtrType = Arg0->getType();
         PacUavDesc =

@@ -112,80 +112,165 @@ void AMDGPUAsmPrinter::EmitEndOfAsmFile(Module &M) {
 
 bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 
-  // The starting address of all shader programs must be 256 bytes aligned.
-  MF.setAlignment(8);
+  const AMDGPUSubtarget &Subtarget = MF.getSubtarget<AMDGPUSubtarget>();
+  if (Subtarget.isM2S()) {
+    // The starting address of all shader programs must be 256 bytes aligned.
+    MF.setAlignment(8);
+    SetupMachineFunction(MF);
 
-  SetupMachineFunction(MF);
+    DisasmLines.clear();
+    HexLines.clear();
+    DisasmLineMaxLen = 0;
 
-  MCContext &Context = getObjFileLowering().getContext();
-  MCSectionELF *ConfigSection =
-      Context.getELFSection(".AMDGPU.config", ELF::SHT_PROGBITS, 0);
-  OutStreamer->SwitchSection(ConfigSection);
+    // Emit function body
+    EmitFunctionBody();
 
-  const AMDGPUSubtarget &STM = MF.getSubtarget<AMDGPUSubtarget>();
-  SIProgramInfo KernelInfo;
-  if (STM.getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS) {
-    getSIProgramInfo(KernelInfo, MF);
-    if (!STM.isAmdHsaOS()) {
-      EmitProgramInfoSI(MF, KernelInfo);
+    // Emit args info
+    OutStreamer->EmitRawText(".args");
+
+    std::string DataType;
+    std::string Offset;
+    std::string Postfix;
+
+    auto Func = MF.getFunction();
+    auto &Args = Func->getArgumentList();
+    for (auto &Arg : Args) {
+      unsigned ArgIdx = Arg.getArgNo();
+
+      // Get offset
+      Offset = std::to_string(ArgIdx * 16) + " ";
+      auto *ArgType = Func->getFunctionType()->getParamType(ArgIdx);
+
+      // Get data type
+      auto SeqType = ArgType->getSequentialElementType();
+      if (SeqType->isIntegerTy(32))
+        DataType = "i32";
+      else if (SeqType->isFloatingPointTy())
+        DataType = "float";
+      else
+        DataType = "NA";
+
+      if (ArgType->isPointerTy()) {
+        DataType += "*";
+        if (ArgType->isVectorTy())
+          DataType +=
+              "[" + std::to_string(ArgType->getVectorNumElements()) + "]";
+        DataType += " ";
+        // Global/Constant use uav, Local use hl
+        unsigned ArgAddrSpace =
+            dyn_cast<PointerType>(ArgType)->getAddressSpace();
+        switch (ArgAddrSpace) {
+        case AMDGPUAS::GLOBAL_ADDRESS:
+        case AMDGPUAS::CONSTANT_ADDRESS:
+          Postfix = "uav" + std::to_string(ArgIdx+10) + " ";
+          break;
+        case AMDGPUAS::LOCAL_ADDRESS:
+          Postfix = "hl";
+          break;
+        default:
+          break;
+        }
+      }
+      else{
+        DataType += " ";
+      }
+
+      OutStreamer->EmitRawText("\t" + DataType + Arg.getName() + " " + Offset +
+                               Postfix);
     }
-    // Emit directives
-    AMDGPUTargetStreamer *TS =
-        static_cast<AMDGPUTargetStreamer *>(OutStreamer->getTargetStreamer());
-    TS->EmitDirectiveHSACodeObjectVersion(1, 0);
-    AMDGPU::IsaVersion ISA = STM.getIsaVersion();
-    TS->EmitDirectiveHSACodeObjectISA(ISA.Major, ISA.Minor, ISA.Stepping,
-                                      "AMD", "AMDGPU");
+    OutStreamer->EmitRawText("\n");
+
+    // Emit metadata section
+    const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
+    OutStreamer->EmitRawText(".metatada");
+    OutStreamer->EmitRawText("\tuserElements[0] = PTR_UAV_TALBE, 0, s[2:3]");
+    OutStreamer->EmitRawText("\tuserElements[1] = IMM_CONST_BUFFER, 0, s[4:7]");
+    OutStreamer->EmitRawText(
+        "\tuserElements[2] = IMM_CONST_BUFFER, 1, s[8:11]");
+    OutStreamer->EmitRawText("\n");
+    OutStreamer->EmitRawText("\tFloatMode = 192");
+    OutStreamer->EmitRawText("\tIeeeMode = 0");
+    OutStreamer->EmitRawText("\n");
+    OutStreamer->EmitRawText("\tCOMPUTE_PGM_RSRC2:USER_SGPR = " +
+                             Twine(MFI->NumUserSGPRs));
+    OutStreamer->EmitRawText("\tCOMPUTE_PGM_RSRC2:TGID_X_EN = 1");
+    OutStreamer->EmitRawText("\tCOMPUTE_PGM_RSRC2:TGID_Y_EN = 1");
+    OutStreamer->EmitRawText("\tCOMPUTE_PGM_RSRC2:TGID_Z_EN = 1");
   } else {
-    EmitProgramInfoR600(MF);
-  }
 
-  DisasmLines.clear();
-  HexLines.clear();
-  DisasmLineMaxLen = 0;
+    // The starting address of all shader programs must be 256 bytes aligned.
 
-  EmitFunctionBody();
+    SetupMachineFunction(MF);
 
-  if (isVerbose()) {
-    MCSectionELF *CommentSection =
-        Context.getELFSection(".AMDGPU.csdata", ELF::SHT_PROGBITS, 0);
-    OutStreamer->SwitchSection(CommentSection);
+    MCContext &Context = getObjFileLowering().getContext();
+    MCSectionELF *ConfigSection =
+        Context.getELFSection(".AMDGPU.config", ELF::SHT_PROGBITS, 0);
+    OutStreamer->SwitchSection(ConfigSection);
 
+    const AMDGPUSubtarget &STM = MF.getSubtarget<AMDGPUSubtarget>();
+    SIProgramInfo KernelInfo;
     if (STM.getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS) {
-      OutStreamer->emitRawComment(" Kernel info:", false);
-      OutStreamer->emitRawComment(" codeLenInByte = " + Twine(KernelInfo.CodeLen),
-                                  false);
-      OutStreamer->emitRawComment(" NumSgprs: " + Twine(KernelInfo.NumSGPR),
-                                  false);
-      OutStreamer->emitRawComment(" NumVgprs: " + Twine(KernelInfo.NumVGPR),
-                                  false);
-      OutStreamer->emitRawComment(" FloatMode: " + Twine(KernelInfo.FloatMode),
-                                  false);
-      OutStreamer->emitRawComment(" IeeeMode: " + Twine(KernelInfo.IEEEMode),
-                                  false);
-      OutStreamer->emitRawComment(" ScratchSize: " + Twine(KernelInfo.ScratchSize),
-                                  false);
+      getSIProgramInfo(KernelInfo, MF);
+      if (!STM.isAmdHsaOS()) {
+        EmitProgramInfoSI(MF, KernelInfo);
+      }
+      // Emit directives
+      AMDGPUTargetStreamer *TS =
+          static_cast<AMDGPUTargetStreamer *>(OutStreamer->getTargetStreamer());
+      TS->EmitDirectiveHSACodeObjectVersion(1, 0);
+      AMDGPU::IsaVersion ISA = STM.getIsaVersion();
+      TS->EmitDirectiveHSACodeObjectISA(ISA.Major, ISA.Minor, ISA.Stepping,
+                                        "AMD", "AMDGPU");
     } else {
-      R600MachineFunctionInfo *MFI = MF.getInfo<R600MachineFunctionInfo>();
-      OutStreamer->emitRawComment(
-        Twine("SQ_PGM_RESOURCES:STACK_SIZE = " + Twine(MFI->StackSize)));
+      EmitProgramInfoR600(MF);
+    }
+
+    DisasmLines.clear();
+    HexLines.clear();
+    DisasmLineMaxLen = 0;
+
+    EmitFunctionBody();
+
+    if (isVerbose()) {
+      MCSectionELF *CommentSection =
+          Context.getELFSection(".AMDGPU.csdata", ELF::SHT_PROGBITS, 0);
+      OutStreamer->SwitchSection(CommentSection);
+
+      if (STM.getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS) {
+        OutStreamer->emitRawComment(" Kernel info:", false);
+        OutStreamer->emitRawComment(
+            " codeLenInByte = " + Twine(KernelInfo.CodeLen), false);
+        OutStreamer->emitRawComment(" NumSgprs: " + Twine(KernelInfo.NumSGPR),
+                                    false);
+        OutStreamer->emitRawComment(" NumVgprs: " + Twine(KernelInfo.NumVGPR),
+                                    false);
+        OutStreamer->emitRawComment(
+            " FloatMode: " + Twine(KernelInfo.FloatMode), false);
+        OutStreamer->emitRawComment(" IeeeMode: " + Twine(KernelInfo.IEEEMode),
+                                    false);
+        OutStreamer->emitRawComment(
+            " ScratchSize: " + Twine(KernelInfo.ScratchSize), false);
+      } else {
+        R600MachineFunctionInfo *MFI = MF.getInfo<R600MachineFunctionInfo>();
+        OutStreamer->emitRawComment(
+            Twine("SQ_PGM_RESOURCES:STACK_SIZE = " + Twine(MFI->StackSize)));
+      }
+    }
+
+    if (STM.dumpCode()) {
+
+      OutStreamer->SwitchSection(
+          Context.getELFSection(".AMDGPU.disasm", ELF::SHT_NOTE, 0));
+
+      for (size_t i = 0; i < DisasmLines.size(); ++i) {
+        std::string Comment(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
+        Comment += " ; " + HexLines[i] + "\n";
+
+        OutStreamer->EmitBytes(StringRef(DisasmLines[i]));
+        OutStreamer->EmitBytes(StringRef(Comment));
+      }
     }
   }
-
-  if (STM.dumpCode()) {
-
-    OutStreamer->SwitchSection(
-        Context.getELFSection(".AMDGPU.disasm", ELF::SHT_NOTE, 0));
-
-    for (size_t i = 0; i < DisasmLines.size(); ++i) {
-      std::string Comment(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
-      Comment += " ; " + HexLines[i] + "\n";
-
-      OutStreamer->EmitBytes(StringRef(DisasmLines[i]));
-      OutStreamer->EmitBytes(StringRef(Comment));
-    }
-  }
-
   return false;
 }
 
@@ -283,7 +368,7 @@ void AMDGPUAsmPrinter::getSIProgramInfo(SIProgramInfo &ProgInfo,
         }
         unsigned reg = MO.getReg();
         if (reg == AMDGPU::VCC || reg == AMDGPU::VCC_LO ||
-	    reg == AMDGPU::VCC_HI) {
+      reg == AMDGPU::VCC_HI) {
           VCCUsed = true;
           continue;
         } else if (reg == AMDGPU::FLAT_SCR ||

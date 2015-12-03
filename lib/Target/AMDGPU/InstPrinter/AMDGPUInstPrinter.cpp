@@ -28,7 +28,7 @@ void AMDGPUInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
 }
 
 void AMDGPUInstPrinter::printU8ImmOperand(const MCInst *MI, unsigned OpNo,
-                                           raw_ostream &O) {
+                                          raw_ostream &O) {
   O << formatHex(MI->getOperand(OpNo).getImm() & 0xff);
 }
 
@@ -88,7 +88,7 @@ void AMDGPUInstPrinter::printDSOffset(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printDSOffset0(const MCInst *MI, unsigned OpNo,
-                                        raw_ostream &O) {
+                                       raw_ostream &O) {
   if (MI->getOperand(OpNo).getImm()) {
     O << " offset0:";
     printU8ImmDecOperand(MI, OpNo, O);
@@ -96,7 +96,7 @@ void AMDGPUInstPrinter::printDSOffset0(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printDSOffset1(const MCInst *MI, unsigned OpNo,
-                                        raw_ostream &O) {
+                                       raw_ostream &O) {
   if (MI->getOperand(OpNo).getImm()) {
     O << " offset1:";
     printU8ImmDecOperand(MI, OpNo, O);
@@ -173,19 +173,19 @@ void AMDGPUInstPrinter::printRegOperand(unsigned reg, raw_ostream &O,
   if (MRI.getRegClass(AMDGPU::VGPR_32RegClassID).contains(reg)) {
     Type = 'v';
     NumRegs = 1;
-  } else  if (MRI.getRegClass(AMDGPU::SGPR_32RegClassID).contains(reg)) {
+  } else if (MRI.getRegClass(AMDGPU::SGPR_32RegClassID).contains(reg)) {
     Type = 's';
     NumRegs = 1;
   } else if (MRI.getRegClass(AMDGPU::VReg_64RegClassID).contains(reg)) {
     Type = 'v';
     NumRegs = 2;
-  } else  if (MRI.getRegClass(AMDGPU::SReg_64RegClassID).contains(reg)) {
+  } else if (MRI.getRegClass(AMDGPU::SReg_64RegClassID).contains(reg)) {
     Type = 's';
     NumRegs = 2;
   } else if (MRI.getRegClass(AMDGPU::VReg_128RegClassID).contains(reg)) {
     Type = 'v';
     NumRegs = 4;
-  } else  if (MRI.getRegClass(AMDGPU::SReg_128RegClassID).contains(reg)) {
+  } else if (MRI.getRegClass(AMDGPU::SReg_128RegClassID).contains(reg)) {
     Type = 's';
     NumRegs = 4;
   } else if (MRI.getRegClass(AMDGPU::VReg_96RegClassID).contains(reg)) {
@@ -221,10 +221,13 @@ void AMDGPUInstPrinter::printRegOperand(unsigned reg, raw_ostream &O,
 
 void AMDGPUInstPrinter::printVOPDst(const MCInst *MI, unsigned OpNo,
                                     raw_ostream &O) {
-  if (MII.get(MI->getOpcode()).TSFlags & SIInstrFlags::VOP3)
-    O << "_e64 ";
-  else
-    O << "_e32 ";
+  // if (MII.get(MI->getOpcode()).TSFlags & SIInstrFlags::VOP3)
+  //   O << "_e64 ";
+  // else
+  //   O << "_e32 ";
+
+  // For Multi2Sim
+  O << " ";
 
   printOperand(MI, OpNo, O);
 }
@@ -326,7 +329,8 @@ void AMDGPUInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
       O << "0.0";
     else {
       const MCInstrDesc &Desc = MII.get(MI->getOpcode());
-      const MCRegisterClass &ImmRC = MRI.getRegClass(Desc.OpInfo[OpNo].RegClass);
+      const MCRegisterClass &ImmRC =
+          MRI.getRegClass(Desc.OpInfo[OpNo].RegClass);
 
       if (ImmRC.getSize() == 4)
         printImmediate32(FloatToBits(Op.getFPImm()), O);
@@ -373,7 +377,7 @@ void AMDGPUInstPrinter::printInterpSlot(const MCInst *MI, unsigned OpNum,
 void AMDGPUInstPrinter::printMemOperand(const MCInst *MI, unsigned OpNo,
                                         raw_ostream &O) {
   printOperand(MI, OpNo, O);
-  O  << ", ";
+  O << ", ";
   printOperand(MI, OpNo + 1, O);
 }
 
@@ -406,7 +410,7 @@ void AMDGPUInstPrinter::printClampSI(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printOModSI(const MCInst *MI, unsigned OpNo,
-                                     raw_ostream &O) {
+                                    raw_ostream &O) {
   int Imm = MI->getOperand(OpNo).getImm();
   if (Imm == SIOutMods::MUL2)
     O << " mul:2";
@@ -435,7 +439,8 @@ void AMDGPUInstPrinter::printNeg(const MCInst *MI, unsigned OpNo,
 void AMDGPUInstPrinter::printOMOD(const MCInst *MI, unsigned OpNo,
                                   raw_ostream &O) {
   switch (MI->getOperand(OpNo).getImm()) {
-  default: break;
+  default:
+    break;
   case 1:
     O << " * 2.0";
     break;
@@ -464,7 +469,7 @@ void AMDGPUInstPrinter::printUpdatePred(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printWrite(const MCInst *MI, unsigned OpNo,
-                                       raw_ostream &O) {
+                                   raw_ostream &O) {
   const MCOperand &Op = MI->getOperand(OpNo);
   if (Op.getImm() == 0) {
     O << " (MASKED)";
@@ -472,8 +477,8 @@ void AMDGPUInstPrinter::printWrite(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printSel(const MCInst *MI, unsigned OpNo,
-                                  raw_ostream &O) {
-  const char * chans = "XYZW";
+                                 raw_ostream &O) {
+  const char *chans = "XYZW";
   int sel = MI->getOperand(OpNo).getImm();
 
   int chan = sel & 3;
@@ -487,7 +492,7 @@ void AMDGPUInstPrinter::printSel(const MCInst *MI, unsigned OpNo,
   } else if (sel >= 448) {
     sel -= 448;
     O << sel;
-  } else if (sel >= 0){
+  } else if (sel >= 0) {
     O << sel;
   }
 
@@ -551,7 +556,7 @@ void AMDGPUInstPrinter::printRSel(const MCInst *MI, unsigned OpNo,
 }
 
 void AMDGPUInstPrinter::printCT(const MCInst *MI, unsigned OpNo,
-                                  raw_ostream &O) {
+                                raw_ostream &O) {
   unsigned CT = MI->getOperand(OpNo).getImm();
   switch (CT) {
   case 0:
@@ -592,11 +597,11 @@ void AMDGPUInstPrinter::printSendMsg(const MCInst *MI, unsigned OpNo,
     } else {
       unsigned Stream = (SImm16 >> 8) & 0x3;
       if (Op == 1)
-	O << "cut";
+        O << "cut";
       else if (Op == 2)
-	O << "emit";
+        O << "emit";
       else if (Op == 3)
-	O << "emit-cut";
+        O << "emit-cut";
       O << " stream " << Stream;
     }
     O << "), [m0] ";
@@ -637,6 +642,118 @@ void AMDGPUInstPrinter::printWaitFlag(const MCInst *MI, unsigned OpNo,
       O << ' ';
     O << "lgkmcnt(" << Lgkmcnt << ')';
   }
+}
+
+void AMDGPUInstPrinter::printMTBUFDataFormat(const MCInst *MI, unsigned OpNo,
+                                             raw_ostream &O) {
+  O << "format:[";
+  unsigned DFMT = MI->getOperand(OpNo).getImm();
+  switch (DFMT)
+  {
+    case 0:
+      O << "invalid";
+      break;
+    case 1:
+      O << "BUF_DATA_FORMAT_8";
+      break;
+    case 2:
+      O << "BUF_DATA_FORMAT_16";
+      break;
+    case 3:
+      O << "BUF_DATA_FORMAT_8_8";
+      break;
+    case 4:
+      O << "BUF_DATA_FORMAT_32";
+      break;
+    case 5:
+      O << "BUF_DATA_FORMAT_16_16";
+      break;
+    case 6:
+      O << "BUF_DATA_FORMAT_10_11_11";
+      break;
+    case 7:
+      O << "BUF_DATA_FORMAT_11_11_10";
+      break;
+    case 8:
+      O << "BUF_DATA_FORMAT_10_10_10_2";
+      break;
+    case 9:
+      O << "BUF_DATA_FORMAT_2_10_10_10";
+      break;
+    case 10:
+      O << "BUF_DATA_FORMAT_8_8_8_8";
+      break;
+    case 11:
+      O << "BUF_DATA_FORMAT_32_32";
+      break;
+    case 12:
+      O << "BUF_DATA_FORMAT_16_16_16_16";
+      break;
+    case 13:
+      O << "BUF_DATA_FORMAT_32_32_32";
+      break;
+    case 14:
+      O << "BUF_DATA_FORMAT_32_32_32_32";
+      break;
+    case 15:
+      O << "reserved";
+      break;
+    default:
+      break;
+    }
+}
+
+void AMDGPUInstPrinter::printMTBUFNumFormat(const MCInst *MI, unsigned OpNo,
+                                            raw_ostream &O) {
+  unsigned NFMT = MI->getOperand(OpNo).getImm();
+  switch (NFMT)
+  {
+    case 0:
+      O << "BUF_NUM_FORMAT_UNORM";
+      break;
+    case 1:
+      O << "BUF_NUM_FORMAT_SNORM";
+      break;
+    case 2:
+      O << "BUF_NUM_FORMAT_USCALED";
+      break;
+    case 3:
+      O << "BUF_NUM_FORMAT_SSCALED";
+      break;
+    case 4:
+      O << "BUF_NUM_FORMAT_UINT";
+      break;
+    case 5:
+      O << "BUF_NUM_FORMAT_SINT";
+      break;
+    case 6:
+      O << "BUF_NUM_FORMAT_SNORM_NZ";
+      break;
+    case 7:
+      O << "BUF_NUM_FORMAT_FLOAT";
+      break;
+    case 8:
+      O << "reserved";
+      break;
+    case 9:
+      O << "BUF_NUM_FORMAT_SRGB";
+      break;
+    case 10:
+      O << "BUF_NUM_FORMAT_UBNORM";
+      break;
+    case 11:
+      O << "BUF_NUM_FORMAT_UBNORM_NZ";
+      break;
+    case 12:
+      O << "BUF_NUM_FORMAT_UBINT";
+      break;
+    case 13:
+      O << "BUF_NUM_FORMAT_UBSCALED";
+      break;
+    default:
+      break;
+    }
+    O << "]";
 }
 
 #include "AMDGPUGenAsmWriter.inc"
