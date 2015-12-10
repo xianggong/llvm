@@ -128,33 +128,41 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     // Emit args info
     OutStreamer->EmitRawText(".args");
 
-    std::string DataType;
-    std::string Offset;
-    std::string Postfix;
 
     auto Func = MF.getFunction();
+    unsigned UavCount = 0;
     auto &Args = Func->getArgumentList();
     for (auto &Arg : Args) {
+      std::string DataType = "NA"; 
+      std::string Offset = "";
+      std::string Postfix = "";
       unsigned ArgIdx = Arg.getArgNo();
 
       // Get offset
       Offset = std::to_string(ArgIdx * 16) + " ";
-      auto *ArgType = Func->getFunctionType()->getParamType(ArgIdx);
 
       // Get data type
-      auto SeqType = ArgType->getSequentialElementType();
-      if (SeqType->isIntegerTy(32))
+      auto *ArgType = Func->getFunctionType()->getParamType(ArgIdx);
+      Type *ElementType = ArgType;
+      while (ElementType->isPointerTy() || ElementType->isVectorTy()) {
+        if (ElementType->isPointerTy())
+          ElementType = ElementType->getPointerElementType();
+        if (ElementType->isVectorTy())
+          ElementType = ElementType->getScalarType();
+      }
+      if (ElementType->isIntegerTy(32))
         DataType = "i32";
-      else if (SeqType->isFloatingPointTy())
+      else if (ElementType->isFloatingPointTy())
         DataType = "float";
-      else
-        DataType = "NA";
 
       if (ArgType->isPointerTy()) {
-        DataType += "*";
-        if (ArgType->isVectorTy())
+        if (ArgType->getPointerElementType()->isVectorTy())
           DataType +=
-              "[" + std::to_string(ArgType->getVectorNumElements()) + "]";
+              "[" +
+              std::to_string(
+                  ArgType->getPointerElementType()->getVectorNumElements()) +
+              "]";
+        DataType += "*";
         DataType += " ";
         // Global/Constant use uav, Local use hl
         unsigned ArgAddrSpace =
@@ -162,7 +170,8 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
         switch (ArgAddrSpace) {
         case AMDGPUAS::GLOBAL_ADDRESS:
         case AMDGPUAS::CONSTANT_ADDRESS:
-          Postfix = "uav" + std::to_string(ArgIdx+10) + " ";
+          Postfix = "uav" + std::to_string(UavCount + 10) + " ";
+          UavCount++;
           break;
         case AMDGPUAS::LOCAL_ADDRESS:
           Postfix = "hl";
@@ -170,8 +179,7 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
         default:
           break;
         }
-      }
-      else{
+      } else {
         DataType += " ";
       }
 
@@ -182,8 +190,8 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 
     // Emit metadata section
     const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
-    OutStreamer->EmitRawText(".metatada");
-    OutStreamer->EmitRawText("\tuserElements[0] = PTR_UAV_TALBE, 0, s[2:3]");
+    OutStreamer->EmitRawText(".metadata");
+    OutStreamer->EmitRawText("\tuserElements[0] = PTR_UAV_TABLE, 0, s[2:3]");
     OutStreamer->EmitRawText("\tuserElements[1] = IMM_CONST_BUFFER, 0, s[4:7]");
     OutStreamer->EmitRawText(
         "\tuserElements[2] = IMM_CONST_BUFFER, 1, s[8:11]");

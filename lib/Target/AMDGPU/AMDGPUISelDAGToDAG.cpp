@@ -1595,7 +1595,7 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
 
   SDLoc DL = SDLoc(In);
   offset = CurDAG->getTargetConstant(0, DL, MVT::i16);
-  offen = CurDAG->getTargetConstant(0, DL, MVT::i1);
+  offen = CurDAG->getTargetConstant(1, DL, MVT::i1);
   glc = CurDAG->getTargetConstant(0, DL, MVT::i1);
   idxen = CurDAG->getTargetConstant(0, DL, MVT::i1);
   addr64 = CurDAG->getTargetConstant(0, DL, MVT::i1);
@@ -1603,11 +1603,8 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
   tfe = CurDAG->getTargetConstant(0, DL, MVT::i1);
   soffset = CurDAG->getTargetConstant(0, DL, MVT::i32);
 
-  // TODO: use correct format
-  dfmt = CurDAG->getTargetConstant(0, DL, MVT::i8);
-  nfmt = CurDAG->getTargetConstant(0, DL, MVT::i8);
-
-  offen = CurDAG->getTargetConstant(1, DL, MVT::i1);
+  unsigned dfmtID = 0; // Invalid data format by default
+  unsigned nfmtID = 7; // Float num format by default
 
   // In node should be an i32 ADD node, transform from getelementptr
   if ((In.getOpcode() == ISD::ADD) && (In.getValueType() == MVT::i32)) {
@@ -1639,14 +1636,40 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
       srsrc = uavDesc;
       vaddr = In;
 
+      nfmt = CurDAG->getTargetConstant(nfmtID, DL, MVT::i8);
+      dfmt = CurDAG->getTargetConstant(dfmtID, DL, MVT::i8);
+
       return true;
     }
   } else if (In.getOpcode() == ISD::INTRINSIC_W_CHAIN) {
-    SDValue N2 = In.getOperand(2);
-    SDValue N3 = In.getOperand(3);
+    // Should be a m2s.pac.uav.desc node
+    vaddr = In.getOperand(2);
+    srsrc = In.getOperand(3);
 
-    srsrc = N3;
-    vaddr = N2;
+    // Try to figure out the correct data format
+    for (auto user : In.getNode()->uses()) {
+      auto MemTy = cast<MemSDNode>(user)->getMemoryVT();
+      unsigned numElems = MemTy.isVector() ? MemTy.getVectorNumElements() : 1;
+      switch (numElems) {
+      case 1:
+        dfmtID = 4;
+        break;
+      case 2:
+        dfmtID = 11;
+        break;
+      case 3:
+        dfmtID = 13;
+        break;
+      case 4:
+        dfmtID = 14;
+        break;
+      default:
+        break;
+      }
+    }
+
+    nfmt = CurDAG->getTargetConstant(nfmtID, DL, MVT::i8);
+    dfmt = CurDAG->getTargetConstant(dfmtID, DL, MVT::i8);
 
     return true;
   }

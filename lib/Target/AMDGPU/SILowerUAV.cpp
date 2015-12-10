@@ -79,13 +79,12 @@ void SILowerUAVPass::LowerGetUAV(MachineInstr &MI, unsigned PtrUavTableRegs) {
   MachineInstr *movIdxToReg = MRI->getVRegDef(Idx);
 
   // Get the index of the parameter then remove these machine instructions
-  unsigned IdxImm = 80;
+  unsigned IdxImm = 0;
   if (movAddrSpaceToReg)
     movAddrSpaceToReg->eraseFromParent();
   if (movIdxToReg) {
-    unsigned Imm = movIdxToReg->getOperand(1).getImm();
-    IdxImm += Imm * 8;
-    // movIdxToReg->eraseFromParent();
+    IdxImm = movIdxToReg->getOperand(1).getImm();
+    movIdxToReg->eraseFromParent();
   }
   // Lower it to s_load_dwordx4_imm
   unsigned Dst = MI.getOperand(0).getReg();
@@ -98,7 +97,7 @@ void SILowerUAVPass::LowerGetUAV(MachineInstr &MI, unsigned PtrUavTableRegs) {
 }
 
 void SILowerUAVPass::LowerPacUAV(MachineInstr &MI) {
-  // Clean dummy node after instruction selection, we only used it for passing
+  // Clean dummy node after instruction selection, we only use it for passing
   // UAV desc registers
   MI.eraseFromParent();
 }

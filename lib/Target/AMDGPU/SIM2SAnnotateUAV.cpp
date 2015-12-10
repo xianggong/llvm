@@ -97,7 +97,7 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
       case AMDGPUAS::GLOBAL_ADDRESS:
       case AMDGPUAS::CONSTANT_ADDRESS: {
         Value *CallInstArgs[] = {ConstantInt::get(Int32, ArgAddrSpace),
-                                 ConstantInt::get(Int32, ArgIdx)};
+                                 ConstantInt::get(Int32, 0x50 + ArgIdx * 8)};
         CallInst *CallGetUAV =
             CallInst::Create(GetUavDesc, CallInstArgs, "uav." + Arg.getName(),
                              EntryBlock.getFirstInsertionPt());

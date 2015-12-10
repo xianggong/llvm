@@ -221,13 +221,10 @@ void AMDGPUInstPrinter::printRegOperand(unsigned reg, raw_ostream &O,
 
 void AMDGPUInstPrinter::printVOPDst(const MCInst *MI, unsigned OpNo,
                                     raw_ostream &O) {
-  // if (MII.get(MI->getOpcode()).TSFlags & SIInstrFlags::VOP3)
-  //   O << "_e64 ";
-  // else
-  //   O << "_e32 ";
-
-  // For Multi2Sim
-  O << " ";
+  if (MII.get(MI->getOpcode()).TSFlags & SIInstrFlags::VOP3)
+    O << "_e64 ";
+  else
+    O << "_e32 ";
 
   printOperand(MI, OpNo, O);
 }
@@ -644,8 +641,8 @@ void AMDGPUInstPrinter::printWaitFlag(const MCInst *MI, unsigned OpNo,
   }
 }
 
-void AMDGPUInstPrinter::printMTBUFDataFormat(const MCInst *MI, unsigned OpNo,
-                                             raw_ostream &O) {
+void AMDGPUInstPrinter::printDFMT(const MCInst *MI, unsigned OpNo,
+                                        raw_ostream &O) {
   O << "format:[";
   unsigned DFMT = MI->getOperand(OpNo).getImm();
   switch (DFMT)
@@ -703,7 +700,7 @@ void AMDGPUInstPrinter::printMTBUFDataFormat(const MCInst *MI, unsigned OpNo,
     }
 }
 
-void AMDGPUInstPrinter::printMTBUFNumFormat(const MCInst *MI, unsigned OpNo,
+void AMDGPUInstPrinter::printNFMT(const MCInst *MI, unsigned OpNo,
                                             raw_ostream &O) {
   unsigned NFMT = MI->getOperand(OpNo).getImm();
   switch (NFMT)

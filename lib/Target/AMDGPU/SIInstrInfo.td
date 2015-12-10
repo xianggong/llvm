@@ -545,6 +545,14 @@ def tfe : tfe_base <TFEMubufMatchClass>;
 def tfe_flat : tfe_base <TFEFlatMatchClass>;
 def tfe_flat_atomic : tfe_base <TFEFlatAtomicMatchClass>;
 
+def nfmt : Operand<i8> {
+  let PrintMethod = "printNFMT";
+}
+
+def dfmt : Operand<i8> {
+  let PrintMethod = "printDFMT";
+}
+
 def omod : Operand <i32> {
   let PrintMethod = "printOModSI";
   let ParserMatchClass = OModMatchClass;
@@ -2147,6 +2155,17 @@ class MTBUF_Pseudo <string opName, dag outs, dag ins, list<dag> pattern> :
   SIMCInstr<opName, SISubtarget.NONE> {
   let isPseudo = 1;
   let isCodeGenOnly = 1;
+
+  // dummy fields, so that we can use let statements around multiclasses
+  bits<1> offen;
+  bits<1> idxen;
+  bits<8> vaddr;
+  bits<1> glc;
+  bits<1> slc;
+  bits<1> tfe;
+  bits<8> soffset;
+  bits<8> dfmt;
+  bits<8> nfmt;
 }
 
 class MTBUF_Real_si <bits<3> op, string opName, dag outs, dag ins,
@@ -2171,33 +2190,61 @@ multiclass MTBUF_m <bits<3> op, string opName, dag outs, dag ins, string asm,
 
 }
 
+// let mayStore = 1, mayLoad = 0 in {
+
+// multiclass MTBUF_Store_Helper <bits<3> op, string opName,
+//                                RegisterClass regClass> : MTBUF_m <
+//   op, opName, (outs),
+//   (ins regClass:$vdata, u16imm:$offset, i1imm:$offen, i1imm:$idxen, i1imm:$glc,
+//    i1imm:$addr64, i8imm:$dfmt, i8imm:$nfmt, VGPR_32:$vaddr,
+//    SReg_128:$srsrc, i1imm:$slc, i1imm:$tfe, SCSrc_32:$soffset),
+//   opName#" $vdata, $offset, $offen, $idxen, $glc, $addr64, $dfmt,"
+//         #" $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset", []
+// >;
+
+// } // mayStore = 1, mayLoad = 0
+
+// let mayLoad = 1, mayStore = 0 in {
+
+// multiclass MTBUF_Load_Helper <bits<3> op, string opName,
+//                               RegisterClass regClass> : MTBUF_m <
+//   op, opName, (outs regClass:$dst),
+//   (ins u16imm:$offset, i1imm:$offen, i1imm:$idxen, i1imm:$glc, i1imm:$addr64,
+//        i8imm:$dfmt, i8imm:$nfmt, VGPR_32:$vaddr, SReg_128:$srsrc,
+//        i1imm:$slc, i1imm:$tfe, SCSrc_32:$soffset),
+//   opName#" $dst, $offset, $offen, $idxen, $glc, $addr64, $dfmt,"
+//         #" $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset", []
+// >;
+
+// } // mayLoad = 1, mayStore = 0
+
+// For Multi2sim
 let mayStore = 1, mayLoad = 0 in {
-
-multiclass MTBUF_Store_Helper <bits<3> op, string opName,
-                               RegisterClass regClass> : MTBUF_m <
-  op, opName, (outs),
-  (ins regClass:$vdata, u16imm:$offset, i1imm:$offen, i1imm:$idxen, i1imm:$glc,
-   i1imm:$addr64, i8imm:$dfmt, i8imm:$nfmt, VGPR_32:$vaddr,
-   SReg_128:$srsrc, i1imm:$slc, i1imm:$tfe, SCSrc_32:$soffset),
-  opName#" $vdata, $offset, $offen, $idxen, $glc, $addr64, $dfmt,"
-        #" $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset", []
->;
-
+  let offen = 1, idxen = 0 in {
+    multiclass MTBUF_Store_Helper <bits<3> op, string opName,
+                                 RegisterClass regClass> : MTBUF_m <
+      op, opName, (outs),
+      (ins regClass:$vdata, u16imm:$offset, offen:$offen, 
+      idxen:$idxen, glc:$glc, addr64:$addr64, dfmt:$dfmt, nfmt:$nfmt,
+      VGPR_32:$vaddr, SReg_128:$srsrc, slc:$slc, tfe:$tfe, SCSrc_32:$soffset),
+      opName#" $vdata, $vaddr, $srsrc, $offset $offen $dfmt,$nfmt", []
+    >;
+  } // offen = 1, idxen = 0
 } // mayStore = 1, mayLoad = 0
 
 let mayLoad = 1, mayStore = 0 in {
-
-multiclass MTBUF_Load_Helper <bits<3> op, string opName,
+  let offen = 1, idxen = 0 in {
+    multiclass MTBUF_Load_Helper <bits<3> op, string opName,
                               RegisterClass regClass> : MTBUF_m <
-  op, opName, (outs regClass:$dst),
-  (ins u16imm:$offset, i1imm:$offen, i1imm:$idxen, i1imm:$glc, i1imm:$addr64,
-       i8imm:$dfmt, i8imm:$nfmt, VGPR_32:$vaddr, SReg_128:$srsrc,
-       i1imm:$slc, i1imm:$tfe, SCSrc_32:$soffset),
-  opName#" $dst, $offset, $offen, $idxen, $glc, $addr64, $dfmt,"
-        #" $nfmt, $vaddr, $srsrc, $slc, $tfe, $soffset", []
->;
-
+      op, opName#"_offen", (outs regClass:$dst),
+      (ins u16imm:$offset, offen:$offen, idxen:$idxen, glc:$glc, addr64:$addr64,
+      dfmt:$dfmt, nfmt:$nfmt, VGPR_32:$vaddr, SReg_128:$srsrc,
+      slc:$slc, tfe:$tfe, SCSrc_32:$soffset),
+      opName#" $dst, $vaddr, $srsrc, $offset $offen $dfmt,$nfmt", []
+    >;
+  } // offen = 1, idxen = 0
 } // mayLoad = 1, mayStore = 0
+
 
 //===----------------------------------------------------------------------===//
 // MUBUF classes

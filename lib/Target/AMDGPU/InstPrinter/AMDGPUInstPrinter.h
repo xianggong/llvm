@@ -83,10 +83,8 @@ private:
   static void printWaitFlag(const MCInst *MI, unsigned OpNo, raw_ostream &O);
 
   // For Multi2Sim
-  static void printMTBUFDataFormat(const MCInst *MI, unsigned OpNo,
-                                   raw_ostream &O);
-  static void printMTBUFNumFormat(const MCInst *MI, unsigned OpNo,
-                                  raw_ostream &O);
+  static void printDFMT(const MCInst *MI, unsigned OpNo, raw_ostream &O);
+  static void printNFMT(const MCInst *MI, unsigned OpNo, raw_ostream &O);
 };
 
 } // End namespace llvm
