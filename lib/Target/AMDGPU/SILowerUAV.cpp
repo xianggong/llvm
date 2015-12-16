@@ -135,7 +135,10 @@ bool SILowerUAVPass::runOnMachineFunction(MachineFunction &MF) {
       switch (MI.getOpcode()) {
       default:
         break;
-      case AMDGPU::SI_M2S_PAC_UAV_DESC:
+      case AMDGPU::SI_M2S_PAC_UAV_DESC_I32_GLOBAL:
+      case AMDGPU::SI_M2S_PAC_UAV_DESC_V4I32_GLOBAL:
+      case AMDGPU::SI_M2S_PAC_UAV_DESC_FLOAT_GLOBAL:
+      case AMDGPU::SI_M2S_PAC_UAV_DESC_V4FLOAT_GLOBAL:
         LowerPacUAV(MI);
         break;
       }

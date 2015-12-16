@@ -267,6 +267,11 @@ bool SIShrinkInstructions::runOnMachineFunction(MachineFunction &MF) {
       }
 
       if (Op32 == AMDGPU::V_CNDMASK_B32_e32) {
+        // Bypass for Multi2sim
+        const AMDGPUSubtarget &Subtarget = MF.getSubtarget<AMDGPUSubtarget>();
+        if (Subtarget.isM2S())
+          continue;
+
         // We shrink V_CNDMASK_B32_e64 using regalloc hints like we do for VOPC
         // instructions.
         const MachineOperand *Src2 =

@@ -1648,23 +1648,26 @@ bool AMDGPUDAGToDAGISel::SelectMTBUFOffsetM2S(SDValue In, SDValue &offset,
 
     // Try to figure out the correct data format
     for (auto user : In.getNode()->uses()) {
-      auto MemTy = cast<MemSDNode>(user)->getMemoryVT();
-      unsigned numElems = MemTy.isVector() ? MemTy.getVectorNumElements() : 1;
-      switch (numElems) {
-      case 1:
-        dfmtID = 4;
-        break;
-      case 2:
-        dfmtID = 11;
-        break;
-      case 3:
-        dfmtID = 13;
-        break;
-      case 4:
-        dfmtID = 14;
-        break;
-      default:
-        break;
+      auto Mem = dyn_cast<MemSDNode>(user);
+      if (Mem) {
+        auto MemTy = Mem->getMemoryVT();
+        unsigned numElems = MemTy.isVector() ? MemTy.getVectorNumElements() : 1;
+        switch (numElems) {
+        case 1:
+          dfmtID = 4;
+          break;
+        case 2:
+          dfmtID = 11;
+          break;
+        case 3:
+          dfmtID = 13;
+          break;
+        case 4:
+          dfmtID = 14;
+          break;
+        default:
+          break;
+        }
       }
     }
 

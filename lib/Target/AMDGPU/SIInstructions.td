@@ -2131,15 +2131,36 @@ def SI_M2S_GET_UAV_DESC: InstSI <
   [(set v4i32:$uavDesc, (int_SI_m2s_get_uav_desc i32:$addrspace, i32:$paraIndex))]
 >;
 
-def SI_M2S_PAC_UAV_DESC: InstSI <
+def SI_M2S_PAC_UAV_DESC_I32_GLOBAL: InstSI <
   (outs SReg_32:$packedOffset),
   (ins SReg_32:$origOffset, SReg_128:$uavDesc),
   "",
-  [(set i32:$packedOffset, (int_SI_m2s_pac_uav_desc i32:$origOffset, v4i32:$uavDesc))]
+  [(set iPTR:$packedOffset, (int_SI_m2s_pac_uav_desc_i32_global iPTR:$origOffset, v4i32:$uavDesc))]
 >;
 
-}
-}
+def SI_M2S_PAC_UAV_DESC_V4I32_GLOBAL: InstSI <
+  (outs SReg_32:$packedOffset),
+  (ins SReg_32:$origOffset, SReg_128:$uavDesc),
+  "",
+  [(set iPTR:$packedOffset, (int_SI_m2s_pac_uav_desc_v4i32_global iPTR:$origOffset, v4i32:$uavDesc))]
+>;
+
+def SI_M2S_PAC_UAV_DESC_FLOAT_GLOBAL: InstSI <
+  (outs SReg_32:$packedOffset),
+  (ins SReg_32:$origOffset, SReg_128:$uavDesc),
+  "",
+  [(set iPTR:$packedOffset, (int_SI_m2s_pac_uav_desc_float_global iPTR:$origOffset, v4i32:$uavDesc))]
+>;
+
+def SI_M2S_PAC_UAV_DESC_V4FLOAT_GLOBAL: InstSI <
+  (outs SReg_32:$packedOffset),
+  (ins SReg_32:$origOffset, SReg_128:$uavDesc),
+  "",
+  [(set iPTR:$packedOffset, (int_SI_m2s_pac_uav_desc_v4float_global iPTR:$origOffset, v4i32:$uavDesc))]
+>;
+
+    }
+  }
 }
 
 let Predicates = [isGCN] in {

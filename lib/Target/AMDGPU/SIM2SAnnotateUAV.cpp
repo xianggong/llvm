@@ -29,7 +29,14 @@ namespace {
 
 // Intrinsic names the UAV is annotated with
 static const char *const getUavDescIntrinsic = "llvm.SI.m2s.get.uav.desc";
-static const char *const pacUavDescIntrinsic = "llvm.SI.m2s.pac.uav.desc";
+static const char *const pacUavDescI32Intrinsic =
+    "llvm.SI.m2s.pac.uav.desc.i32.global";
+static const char *const pacUavDescV4I32GlobalIntrinsic =
+    "llvm.SI.m2s.pac.uav.desc.v4i32.global";
+static const char *const pacUavDescFloatGlobalIntrinsic =
+    "llvm.SI.m2s.pac.uav.desc.float.global";
+static const char *const pacUavDescV4FloatGlobalIntrinsic =
+    "llvm.SI.m2s.pac.uav.desc.v4float.global";
 
 class SIM2SAnnotateUAV : public FunctionPass {
 
@@ -48,6 +55,8 @@ class SIM2SAnnotateUAV : public FunctionPass {
   // We can only erase after traverse all basic blocks
   std::vector<Instruction *> InstsToErase;
 
+  Constant *getPacUavFunc(Value *Arg);
+
 public:
   SIM2SAnnotateUAV() : FunctionPass(ID) {}
 
@@ -61,6 +70,39 @@ public:
 } // end anonymous namespace
 
 char SIM2SAnnotateUAV::ID = 0;
+
+Constant *SIM2SAnnotateUAV::getPacUavFunc(Value *Arg) {
+  Type *PtrType = Arg->getType();
+  Type *PtrElemType = PtrType->getPointerElementType();
+
+  // TODO: more memory addresses
+  if (PtrElemType->isVectorTy()) {
+    Type *VectorElemType = PtrElemType->getVectorElementType();
+    unsigned numElems = PtrElemType->getVectorNumElements();
+
+    switch (numElems) {
+    default:
+      break;
+    case 4:
+      if (VectorElemType->isIntegerTy())
+        return M->getOrInsertFunction(pacUavDescV4I32GlobalIntrinsic, PtrType,
+                                      PtrType, Vector4Int32, (Type *)nullptr);
+      else if (VectorElemType->isFloatingPointTy())
+        return M->getOrInsertFunction(pacUavDescV4FloatGlobalIntrinsic, PtrType,
+                                      PtrType, Vector4Int32, (Type *)nullptr);
+      break;
+    }
+  } else {
+    if (PtrElemType->isIntegerTy())
+      return M->getOrInsertFunction(pacUavDescI32Intrinsic, PtrType, PtrType,
+                                    Vector4Int32, (Type *)nullptr);
+    else if (PtrElemType->isFloatingPointTy())
+      return M->getOrInsertFunction(pacUavDescFloatGlobalIntrinsic, PtrType,
+                                    PtrType, Vector4Int32, (Type *)nullptr);
+  }
+
+  return nullptr;
+}
 
 /// \brief Initialize all the types and constants used in the pass
 bool SIM2SAnnotateUAV::doInitialization(Module &M) {
@@ -179,10 +221,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         // Create CallInst and insert before LD
         assert(Arg1 && "Arg1 = nullptr");
         Value *Args[] = {Arg0, Arg1};
-        Type *PtrType = Arg0->getType();
-        PacUavDesc =
-            M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
-                                   Vector4Int32, (Type *)nullptr);
+        PacUavDesc = getPacUavFunc(Arg0);
+        assert(PacUavDesc && "PacUavDesc = nullptr");
         std::string CallInstName = Arg0->hasName()
                                        ? Arg0->getName().str()
                                        : std::to_string(Arg0->getValueID());
@@ -252,10 +292,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
         // Create CallInst and insert before ST
         assert(Arg1 && "Arg1 = nullptr");
         Value *Args[] = {Arg0, Arg1};
-        Type *PtrType = Arg0->getType();
-        PacUavDesc =
-            M->getOrInsertFunction(pacUavDescIntrinsic, PtrType, PtrType,
-                                   Vector4Int32, (Type *)nullptr);
+        PacUavDesc = getPacUavFunc(Arg0);
+        assert(PacUavDesc && "PacUavDesc = nullptr");
         std::string CallInstName = Arg0->hasName()
                                        ? Arg0->getName().str()
                                        : std::to_string(Arg0->getValueID());
