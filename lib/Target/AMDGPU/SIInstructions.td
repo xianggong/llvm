@@ -2077,6 +2077,7 @@ def ImmConstLoadv4i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4i32>;
 
 // Pattern to load from global memory address 
 def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
+def MUBUFScratchM2S : ComplexPattern<i32, 4, "SelectMUBUFScratchM2S">;
 
 // Global load pattern
 class GlobalLoadM2S <MTBUF opcode, ValueType vt> : Pat <
@@ -2098,13 +2099,34 @@ class GlobalStoreM2S <MTBUF opcode, ValueType vt> : Pat <
           v4i32:$srsrc, i1:$slc, i1:$tfe, i32:$soffset)
 >;
 
+// Global load pattern for i8/i16 types
+class MUBUFScratchLoadPatM2S <MUBUF Instr, ValueType vt, PatFrag ld> : Pat <
+  (vt (ld (MUBUFScratchM2S v4i32:$srsrc, i32:$vaddr,
+                           i32:$soffset, u16imm:$offset))),
+  (Instr $vaddr, $srsrc, $soffset, $offset, 1, 0, 0)
+>;
+
+// Global store pattern for i8/i16 types
+class MUBUFScratchStorePatM2S <MUBUF Instr, ValueType vt, PatFrag ld> : Pat <
+  (st vt:$value, (MUBUFScratchM2S v4i32:$srsrc, i32:$vaddr, i32:$soffset,
+                                  u16imm:$offset)),
+  (Instr $value, $vaddr, $srsrc, $soffset, $offset, 1, 0, 0)
+>;
+
+// Add more complexity to give these patterns more priorities in selection table
+let AddedComplexity = 5000 in {
+
+def GlobalLoadi8 : MUBUFScratchLoadPatM2S<BUFFER_LOAD_SBYTE_OFFEN, i32, sextloadi8_global>;
 def GlobalLoadi32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_X, i32>;
 def GlobalLoadv2i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
 def GlobalLoadv4i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
 
+def GlobalStorei8 : MUBUFScratchStorePatM2S<BUFFER_STORE_BYTE_OFFEN, i32, truncstorei8_global>;
 def GlobalStorei32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_X, i32>;
 def GlobalStorev2i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XY, v2i32>;
 def GlobalStorev4i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XYZW, v4i32>;
+  
+} // let AddedComplexity = 1000 end
 
 // Constant load pattern, same routine as global load
 class ConstantLoadM2S <MTBUF opcode, ValueType vt> : Pat <

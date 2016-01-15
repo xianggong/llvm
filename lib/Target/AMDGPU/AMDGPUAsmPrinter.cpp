@@ -152,6 +152,10 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
       }
       if (ElementType->isIntegerTy(32))
         DataType = "i32";
+      else if (ElementType->isIntegerTy(16))
+        DataType = "i16";
+      else if (ElementType->isIntegerTy(8))
+        DataType = "i8";
       else if (ElementType->isFloatingPointTy())
         DataType = "float";
 
@@ -189,6 +193,11 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     OutStreamer->EmitRawText("\n");
 
     // Emit metadata section
+    const AMDGPUSubtarget &STM = MF.getSubtarget<AMDGPUSubtarget>();
+    SIProgramInfo KernelInfo;
+    if (STM.getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS)
+      getSIProgramInfo(KernelInfo, MF);
+
     const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
     OutStreamer->EmitRawText(".metadata");
     OutStreamer->EmitRawText("\tuserElements[0] = PTR_UAV_TABLE, 0, s[2:3]");
@@ -196,6 +205,9 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     OutStreamer->EmitRawText(
         "\tuserElements[2] = IMM_CONST_BUFFER, 1, s[8:11]");
     OutStreamer->EmitRawText("\n");
+    OutStreamer->EmitRawText("\t// CodeLenInByte = " + Twine(KernelInfo.CodeLen));
+    OutStreamer->EmitRawText("\t// NumVgprs = " + Twine(KernelInfo.NumVGPR));
+    OutStreamer->EmitRawText("\t// NumSgprs = " + Twine(KernelInfo.NumSGPR));
     OutStreamer->EmitRawText("\tFloatMode = 192");
     OutStreamer->EmitRawText("\tIeeeMode = 0");
     OutStreamer->EmitRawText("\n");

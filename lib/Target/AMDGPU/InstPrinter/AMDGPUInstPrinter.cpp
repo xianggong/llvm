@@ -629,14 +629,14 @@ void AMDGPUInstPrinter::printWaitFlag(const MCInst *MI, unsigned OpNo,
 
   if (Expcnt != 0x7) {
     if (NeedSpace)
-      O << ' ';
+      O << " & ";
     O << "expcnt(" << Expcnt << ')';
     NeedSpace = true;
   }
 
   if (Lgkmcnt != 0x7) {
     if (NeedSpace)
-      O << ' ';
+      O << " & ";
     O << "lgkmcnt(" << Lgkmcnt << ')';
   }
 }
