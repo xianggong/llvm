@@ -144,12 +144,12 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
       // Get data type
       auto *ArgType = Func->getFunctionType()->getParamType(ArgIdx);
       Type *ElementType = ArgType;
-      while (ElementType->isPointerTy() || ElementType->isVectorTy()) {
-        if (ElementType->isPointerTy())
-          ElementType = ElementType->getPointerElementType();
-        if (ElementType->isVectorTy())
-          ElementType = ElementType->getScalarType();
-      }
+      if (ElementType->isPointerTy())
+        ElementType = ElementType->getPointerElementType();
+      if (ElementType->isVectorTy())
+        ElementType = ElementType->getScalarType();
+
+      // Get element data type
       if (ElementType->isIntegerTy(32))
         DataType = "i32";
       else if (ElementType->isIntegerTy(16))
@@ -159,15 +159,25 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
       else if (ElementType->isFloatingPointTy())
         DataType = "float";
 
+      // See if we need [] pair
+      if (ArgType->isVectorTy()) {
+        DataType += "[";
+        DataType += std::to_string(ArgType->getVectorNumElements());
+        DataType += "]";
+      }
+
+      // See if we need *
+      if (ArgType->isPointerTy() &&
+          ArgType->getPointerElementType()->isVectorTy()) {
+        DataType += "[";
+        DataType += std::to_string(
+            ArgType->getPointerElementType()->getVectorNumElements());
+        DataType += "]*";
+      }        
+      DataType += " ";
+
+      // post fix for pointer types
       if (ArgType->isPointerTy()) {
-        if (ArgType->getPointerElementType()->isVectorTy())
-          DataType +=
-              "[" +
-              std::to_string(
-                  ArgType->getPointerElementType()->getVectorNumElements()) +
-              "]";
-        DataType += "*";
-        DataType += " ";
         // Global/Constant use uav, Local use hl
         unsigned ArgAddrSpace =
             dyn_cast<PointerType>(ArgType)->getAddressSpace();
@@ -183,14 +193,11 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
         default:
           break;
         }
-      } else {
-        DataType += " ";
       }
 
       OutStreamer->EmitRawText("\t" + DataType + Arg.getName() + " " + Offset +
                                Postfix);
     }
-    OutStreamer->EmitRawText("\n");
 
     // Emit metadata section
     const AMDGPUSubtarget &STM = MF.getSubtarget<AMDGPUSubtarget>();
@@ -199,7 +206,7 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
       getSIProgramInfo(KernelInfo, MF);
 
     const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
-    OutStreamer->EmitRawText(".metadata");
+    OutStreamer->EmitRawText("\n.metadata");
     OutStreamer->EmitRawText("\tuserElements[0] = PTR_UAV_TABLE, 0, s[2:3]");
     OutStreamer->EmitRawText("\tuserElements[1] = IMM_CONST_BUFFER, 0, s[4:7]");
     OutStreamer->EmitRawText(
