@@ -125,6 +125,7 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
   // EntryBlock: get UAV buffer descriptors
   BasicBlock &EntryBlock = F.getEntryBlock();
   auto &Args = F.getArgumentList();
+  unsigned uavCount = 0;
   for (auto &Arg : Args) {
     // Get argument index and address space for get.uav intrinsic function
     unsigned ArgIdx = Arg.getArgNo();
@@ -139,7 +140,8 @@ bool SIM2SAnnotateUAV::runOnFunction(Function &F) {
       case AMDGPUAS::GLOBAL_ADDRESS:
       case AMDGPUAS::CONSTANT_ADDRESS: {
         Value *CallInstArgs[] = {ConstantInt::get(Int32, ArgAddrSpace),
-                                 ConstantInt::get(Int32, 0x50 + ArgIdx * 8)};
+                                 ConstantInt::get(Int32, 0x50 + uavCount * 8)};
+        uavCount++;
         CallInst *CallGetUAV =
             CallInst::Create(GetUavDesc, CallInstArgs, "uav." + Arg.getName(),
                              EntryBlock.getFirstInsertionPt());

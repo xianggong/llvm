@@ -167,13 +167,16 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
       }
 
       // See if we need *
-      if (ArgType->isPointerTy() &&
-          ArgType->getPointerElementType()->isVectorTy()) {
-        DataType += "[";
-        DataType += std::to_string(
-            ArgType->getPointerElementType()->getVectorNumElements());
-        DataType += "]*";
-      }        
+      if (ArgType->isPointerTy()) {
+        if (ArgType->getPointerElementType()->isVectorTy()) {
+          DataType += "[";
+          DataType += std::to_string(
+              ArgType->getPointerElementType()->getVectorNumElements());
+          DataType += "]";
+        }
+
+        DataType += "*";
+      }
       DataType += " ";
 
       // post fix for pointer types
