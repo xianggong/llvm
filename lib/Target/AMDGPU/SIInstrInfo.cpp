@@ -2709,3 +2709,17 @@ uint64_t SIInstrInfo::getDefaultRsrcDataFormat() const {
 
   return RsrcDataFormat;
 }
+
+bool SIInstrInfo::isLowLatencyInstruction(const MachineInstr *MI) const {
+  unsigned Opc = MI->getOpcode();
+
+  return isSMRD(Opc);
+  // return isMUBUF(Opc) || isMTBUF(Opc) || isMIMG(Opc);
+}
+
+bool SIInstrInfo::isHighLatencyInstruction(const MachineInstr *MI) const {
+  unsigned Opc = MI->getOpcode();
+
+  return isMUBUF(Opc) || isMTBUF(Opc) || isMIMG(Opc);
+  // return isSMRD(Opc);
+}

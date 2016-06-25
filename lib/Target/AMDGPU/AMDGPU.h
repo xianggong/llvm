@@ -20,8 +20,10 @@ class AMDGPUInstrPrinter;
 class AMDGPUSubtarget;
 class AMDGPUTargetMachine;
 class FunctionPass;
+class MachineSchedContext;
 class MCAsmInfo;
 class raw_ostream;
+class ScheduleDAGInstrs;
 class Target;
 class TargetMachine;
 
@@ -51,6 +53,8 @@ FunctionPass *createSIFixSGPRLiveRangesPass();
 FunctionPass *createSICodeEmitterPass(formatted_raw_ostream &OS);
 FunctionPass *createSIInsertWaits(TargetMachine &tm);
 FunctionPass *createSIPrepareScratchRegs();
+
+ScheduleDAGInstrs *createSIMachineScheduler(MachineSchedContext *C);
 
 void initializeSIFoldOperandsPass(PassRegistry &);
 extern char &SIFoldOperandsID;

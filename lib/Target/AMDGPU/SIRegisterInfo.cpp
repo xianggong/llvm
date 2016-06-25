@@ -24,7 +24,14 @@
 
 using namespace llvm;
 
-SIRegisterInfo::SIRegisterInfo() : AMDGPURegisterInfo() {}
+SIRegisterInfo::SIRegisterInfo() : AMDGPURegisterInfo() {
+  for (unsigned i = 0; i < getNumRegPressureSets(); ++i) {
+    if (strncmp("SGPR_32", getRegPressureSetName(i), 7) == 0)
+      SGPR32SetID = i;
+    else if (strncmp("VGPR_32", getRegPressureSetName(i), 7) == 0)
+      VGPR32SetID = i;
+  }
+}
 
 void SIRegisterInfo::reserveRegisterTuples(BitVector &Reserved, unsigned Reg) const {
   MCRegAliasIterator R(Reg, this, true);

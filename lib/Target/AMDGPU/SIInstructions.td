@@ -2075,6 +2075,10 @@ def ImmConstLoadi32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORD_IMM, i32>;
 def ImmConstLoadv2i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX2_IMM, v2i32>;
 def ImmConstLoadv4i32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4i32>;
 
+//def ImmConstLoadf32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORD_IMM, f32>;
+//def ImmConstLoadv2f32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX2_IMM, v2f32>;
+//def ImmConstLoadv4f32 : LoadImmConstM2S<S_BUFFER_LOAD_DWORDX4_IMM, v4f32>;
+
 // Pattern to load from global memory address 
 def MTBUFOffsetM2S : ComplexPattern<i32, 12, "SelectMTBUFOffsetM2S">;
 def MUBUFScratchM2S : ComplexPattern<i32, 4, "SelectMUBUFScratchM2S">;
