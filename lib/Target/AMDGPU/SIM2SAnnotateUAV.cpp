@@ -29,6 +29,8 @@ namespace {
 
 // Intrinsic names the UAV is annotated with
 static const char *const getUavDescIntrinsic = "llvm.SI.m2s.get.uav.desc";
+static const char *const pacUavDescI8Intrinsic =
+    "llvm.SI.m2s.pac.uav.desc.i8.global";
 static const char *const pacUavDescI32Intrinsic =
     "llvm.SI.m2s.pac.uav.desc.i32.global";
 static const char *const pacUavDescV4I32GlobalIntrinsic =
@@ -84,7 +86,10 @@ Constant *SIM2SAnnotateUAV::getPacUavFunc(Value *Arg) {
     default:
       break;
     case 4:
-      if (VectorElemType->isIntegerTy())
+      if (VectorElemType->isIntegerTy(8))
+        return M->getOrInsertFunction(pacUavDescI8Intrinsic, PtrType,
+                                      PtrType, Vector4Int32, (Type *)nullptr);
+      if (VectorElemType->isIntegerTy(32))
         return M->getOrInsertFunction(pacUavDescV4I32GlobalIntrinsic, PtrType,
                                       PtrType, Vector4Int32, (Type *)nullptr);
       else if (VectorElemType->isFloatingPointTy())

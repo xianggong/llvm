@@ -2120,7 +2120,7 @@ class MUBUFScratchStorePatM2S <MUBUF Instr, ValueType vt, PatFrag ld> : Pat <
 // Add more complexity to give these patterns more priorities in selection table
 let AddedComplexity = 5000 in {
 
-def GlobalLoadi8 : MUBUFScratchLoadPatM2S<BUFFER_LOAD_SBYTE_OFFEN, i32, sextloadi8_global>;
+def GlobalLoadi8 : MUBUFScratchLoadPatM2S<BUFFER_LOAD_UBYTE_OFFEN, i32, az_extloadi8_global>;
 def GlobalLoadi32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_X, i32>;
 def GlobalLoadv2i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
 def GlobalLoadv4i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
@@ -2155,6 +2155,13 @@ def SI_M2S_GET_UAV_DESC: InstSI <
   (ins u32imm:$addrspace, u32imm:$paraIndex),
   "",
   [(set v4i32:$uavDesc, (int_SI_m2s_get_uav_desc i32:$addrspace, i32:$paraIndex))]
+>;
+
+def SI_M2S_PAC_UAV_DESC_I8_GLOBAL: InstSI <
+  (outs SReg_32:$packedOffset),
+  (ins SReg_32:$origOffset, SReg_128:$uavDesc),
+  "",
+  [(set iPTR:$packedOffset, (int_SI_m2s_pac_uav_desc_i8_global iPTR:$origOffset, v4i32:$uavDesc))]
 >;
 
 def SI_M2S_PAC_UAV_DESC_I32_GLOBAL: InstSI <
