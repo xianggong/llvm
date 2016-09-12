@@ -2093,8 +2093,8 @@ class GlobalLoadM2S <MTBUF opcode, ValueType vt> : Pat <
 >;
 
 // Global store pattern
-class GlobalStoreM2S <MTBUF opcode, ValueType vt> : Pat <
-  (global_store vt:$vdata, (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, 
+class StoreM2S <MTBUF opcode, ValueType vt, PatFrag st> : Pat <
+  (st vt:$vdata, (MTBUFOffsetM2S i16:$offset, i1:$offen, i1:$glc, 
                                          i1:$idxen, i1:$addr64, i8:$dfmt, 
                                          i8:$nfmt, i32:$vaddr, v4i32:$srsrc, 
                                          i1:$slc, i1:$tfe, i32:$soffset)),
@@ -2126,9 +2126,9 @@ def GlobalLoadv2i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XY, v2i32>;
 def GlobalLoadv4i32 : GlobalLoadM2S<TBUFFER_LOAD_FORMAT_XYZW, v4i32>;
 
 def GlobalStorei8 : MUBUFScratchStorePatM2S<BUFFER_STORE_BYTE_OFFEN, i32, truncstorei8_global>;
-def GlobalStorei32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_X, i32>;
-def GlobalStorev2i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XY, v2i32>;
-def GlobalStorev4i32 : GlobalStoreM2S<TBUFFER_STORE_FORMAT_XYZW, v4i32>;
+def GlobalStorei32 : StoreM2S<TBUFFER_STORE_FORMAT_X, i32, global_store>;
+def GlobalStorev2i32 : StoreM2S<TBUFFER_STORE_FORMAT_XY, v2i32, global_store>;
+def GlobalStorev4i32 : StoreM2S<TBUFFER_STORE_FORMAT_XYZW, v4i32, global_store>;
   
 } // let AddedComplexity = 1000 end
 

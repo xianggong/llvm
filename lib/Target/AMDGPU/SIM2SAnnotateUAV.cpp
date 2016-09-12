@@ -33,6 +33,8 @@ static const char *const pacUavDescI8Intrinsic =
     "llvm.SI.m2s.pac.uav.desc.i8.global";
 static const char *const pacUavDescI32Intrinsic =
     "llvm.SI.m2s.pac.uav.desc.i32.global";
+static const char *const pacUavDescV4I8GlobalIntrinsic =
+    "llvm.SI.m2s.pac.uav.desc.v4i8.global";
 static const char *const pacUavDescV4I32GlobalIntrinsic =
     "llvm.SI.m2s.pac.uav.desc.v4i32.global";
 static const char *const pacUavDescFloatGlobalIntrinsic =
